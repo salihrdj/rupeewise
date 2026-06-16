@@ -115,6 +115,7 @@
             }
           ]
         },
+        "numberOutputs": 5,
         "fallbackOutput": 0
       },
       "id": "action-router",
