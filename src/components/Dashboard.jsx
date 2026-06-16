@@ -26,24 +26,108 @@ export default function Dashboard({ transactions = [], categories = [] }) {
   // Toggle for donut chart breakdown
   const [donutType, setDonutType] = useState('outflow')
 
-  // Get current year and month for active monitoring
+  // Get current date references
   const now = useMemo(() => new Date(), [])
-  const currentYear = useMemo(() => now.getFullYear(), [now])
-  const currentMonth = useMemo(() => now.getMonth(), [now]) // 0-indexed
 
-  // Filter transactions for the current calendar month
-  const currentMonthTransactions = useMemo(() => {
-    return transactions.filter(t => {
+  // Generate list of available months and years dynamically from transaction history
+  const availablePeriods = useMemo(() => {
+    const periods = new Map() // Key: YYYY-MM or YYYY, Value: period object
+    
+    // Sort transactions newest first
+    const sortedTxs = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
+    
+    sortedTxs.forEach(t => {
+      if (!t.date) return
       const d = new Date(t.date)
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth
+      if (isNaN(d.getTime())) return
+      
+      const year = d.getFullYear()
+      const month = d.getMonth()
+      
+      // 1. Monthly period
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`
+      if (!periods.has(monthKey)) {
+        const monthLabel = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+        periods.set(monthKey, {
+          key: monthKey,
+          label: monthLabel,
+          year,
+          month,
+          type: 'month'
+        })
+      }
+      
+      // 2. Yearly period
+      const yearKey = `${year}`
+      if (!periods.has(yearKey)) {
+        periods.set(yearKey, {
+          key: yearKey,
+          label: `${year} (Full Year)`,
+          year,
+          month: null,
+          type: 'year'
+        })
+      }
     })
-  }, [transactions, currentYear, currentMonth])
+    
+    const list = Array.from(periods.values())
+    
+    // Ensure current month is always present even if there are no transactions yet
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    if (!periods.has(currentMonthKey)) {
+      const label = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+      list.unshift({
+        key: currentMonthKey,
+        label,
+        year: now.getFullYear(),
+        month: now.getMonth(),
+        type: 'month'
+      })
+    }
+    
+    // Sort keys alphabetically descending (newest first)
+    list.sort((a, b) => b.key.localeCompare(a.key))
+    return list
+  }, [transactions, now])
+
+  // Default to the current calendar month key
+  const defaultPeriodKey = useMemo(() => {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }, [now])
+
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState(defaultPeriodKey)
+
+  // Find active period details
+  const selectedPeriod = useMemo(() => {
+    return availablePeriods.find(p => p.key === selectedPeriodKey) || {
+      key: defaultPeriodKey,
+      label: now.toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+      year: now.getFullYear(),
+      month: now.getMonth(),
+      type: 'month'
+    }
+  }, [availablePeriods, selectedPeriodKey, defaultPeriodKey, now])
+
+  // Filter transactions for the selected period (month or year)
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      if (!t.date) return false
+      const d = new Date(t.date)
+      if (isNaN(d.getTime())) return false
+      
+      if (selectedPeriod.type === 'month') {
+        return d.getFullYear() === selectedPeriod.year && d.getMonth() === selectedPeriod.month
+      } else {
+        return d.getFullYear() === selectedPeriod.year
+      }
+    })
+  }, [transactions, selectedPeriod])
 
   // --- KPI CALCULATIONS ---
   const { totalInflow, totalOutflow } = useMemo(() => {
     let inflow = 0
     let outflow = 0
-    currentMonthTransactions.forEach(t => {
+    filteredTransactions.forEach(t => {
       const amt = parseFloat(t.amount || 0)
       if (t.type === 'inflow') {
         inflow += amt
@@ -52,59 +136,147 @@ export default function Dashboard({ transactions = [], categories = [] }) {
       }
     })
     return { totalInflow: inflow, totalOutflow: outflow }
-  }, [currentMonthTransactions])
+  }, [filteredTransactions])
 
   const netSavings = useMemo(() => totalInflow - totalOutflow, [totalInflow, totalOutflow])
   const savingsRate = useMemo(() => totalInflow > 0 ? (netSavings / totalInflow) * 100 : 0, [netSavings, totalInflow])
 
-  // Daily average calculation (only for outflows/expenses)
-  const daysInCurrentMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth])
-  const currentDay = useMemo(() => now.getDate(), [now])
-  const daysPassed = useMemo(() => now.getMonth() === currentMonth ? currentDay : daysInCurrentMonth, [now, currentMonth, currentDay, daysInCurrentMonth])
-  const dailyOutflowAverage = useMemo(() => daysPassed > 0 ? totalOutflow / daysPassed : 0, [daysPassed, totalOutflow])
+  // Burn Rates & Time Averages calculations
+  const daysInSelectedMonth = useMemo(() => {
+    if (selectedPeriod.type === 'month') {
+      return new Date(selectedPeriod.year, selectedPeriod.month + 1, 0).getDate()
+    }
+    return 0
+  }, [selectedPeriod])
+
+  const daysPassed = useMemo(() => {
+    if (selectedPeriod.type === 'month') {
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+      const currentDay = now.getDate()
+      
+      if (selectedPeriod.year === currentYear && selectedPeriod.month === currentMonth) {
+        return currentDay
+      }
+      return daysInSelectedMonth
+    }
+    return 0
+  }, [selectedPeriod, now, daysInSelectedMonth])
+
+  const dailyOutflowAverage = useMemo(() => {
+    if (selectedPeriod.type === 'month') {
+      return daysPassed > 0 ? totalOutflow / daysPassed : 0
+    }
+    return 0
+  }, [selectedPeriod, daysPassed, totalOutflow])
+
+  const monthsPassed = useMemo(() => {
+    if (selectedPeriod.type === 'year') {
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+      
+      if (selectedPeriod.year === currentYear) {
+        return currentMonth + 1 // e.g. June = 6 months
+      }
+      return 12
+    }
+    return 0
+  }, [selectedPeriod, now])
+
+  const monthlyOutflowAverage = useMemo(() => {
+    if (selectedPeriod.type === 'year') {
+      return monthsPassed > 0 ? totalOutflow / monthsPassed : 0
+    }
+    return 0
+  }, [selectedPeriod, monthsPassed, totalOutflow])
 
   // --- CHART 1: INFLOW VS OUTFLOW TREND DATA ---
-  const dailyTrendData = useMemo(() => {
+  const trendData = useMemo(() => {
     const data = []
-    const dayInflows = {}
-    const dayOutflows = {}
 
-    // Group transactions by day of month
-    currentMonthTransactions.forEach(t => {
-      const d = new Date(t.date)
-      const day = d.getDate()
-      const amt = parseFloat(t.amount || 0)
-      if (t.type === 'inflow') {
-        dayInflows[day] = (dayInflows[day] || 0) + amt
-      } else {
-        dayOutflows[day] = (dayOutflows[day] || 0) + amt
-      }
-    })
+    if (selectedPeriod.type === 'month') {
+      const dayInflows = {}
+      const dayOutflows = {}
 
-    let cumulativeInflow = 0
-    let cumulativeOutflow = 0
-
-    for (let day = 1; day <= daysInCurrentMonth; day++) {
-      // Only plot up to today if it's the current month
-      if (now.getMonth() === currentMonth && day > currentDay) {
-        break
-      }
-
-      cumulativeInflow += dayInflows[day] || 0
-      cumulativeOutflow += dayOutflows[day] || 0
-      
-      data.push({
-        day: `${day}`,
-        Inflow: parseFloat(cumulativeInflow.toFixed(2)),
-        Outflow: parseFloat(cumulativeOutflow.toFixed(2))
+      // Group daily transactions
+      filteredTransactions.forEach(t => {
+        const d = new Date(t.date)
+        const day = d.getDate()
+        const amt = parseFloat(t.amount || 0)
+        if (t.type === 'inflow') {
+          dayInflows[day] = (dayInflows[day] || 0) + amt
+        } else {
+          dayOutflows[day] = (dayOutflows[day] || 0) + amt
+        }
       })
+
+      let cumulativeInflow = 0
+      let cumulativeOutflow = 0
+
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+      const currentDay = now.getDate()
+
+      for (let day = 1; day <= daysInSelectedMonth; day++) {
+        // Stop plotting future days of the current month
+        if (selectedPeriod.year === currentYear && selectedPeriod.month === currentMonth && day > currentDay) {
+          break
+        }
+
+        cumulativeInflow += dayInflows[day] || 0
+        cumulativeOutflow += dayOutflows[day] || 0
+        
+        data.push({
+          label: `${day}`,
+          Inflow: parseFloat(cumulativeInflow.toFixed(2)),
+          Outflow: parseFloat(cumulativeOutflow.toFixed(2))
+        })
+      }
+    } else {
+      // Yearly view: group by month (0-11)
+      const monthInflows = {}
+      const monthOutflows = {}
+
+      filteredTransactions.forEach(t => {
+        const d = new Date(t.date)
+        const month = d.getMonth()
+        const amt = parseFloat(t.amount || 0)
+        if (t.type === 'inflow') {
+          monthInflows[month] = (monthInflows[month] || 0) + amt
+        } else {
+          monthOutflows[month] = (monthOutflows[month] || 0) + amt
+        }
+      })
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      let cumulativeInflow = 0
+      let cumulativeOutflow = 0
+
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth()
+
+      for (let m = 0; m < 12; m++) {
+        // Stop plotting future months of the current year
+        if (selectedPeriod.year === currentYear && m > currentMonth) {
+          break
+        }
+
+        cumulativeInflow += monthInflows[m] || 0
+        cumulativeOutflow += monthOutflows[m] || 0
+
+        data.push({
+          label: monthNames[m],
+          Inflow: parseFloat(cumulativeInflow.toFixed(2)),
+          Outflow: parseFloat(cumulativeOutflow.toFixed(2))
+        })
+      }
     }
     return data
-  }, [currentMonthTransactions, daysInCurrentMonth, currentMonth, currentDay, now])
+  }, [filteredTransactions, selectedPeriod, daysInSelectedMonth, now])
 
   // --- CHART 2: PIE DATA (DYNAMICAL FILTER BY TYPE) ---
   const pieData = useMemo(() => {
-    const typeFilteredTransactions = currentMonthTransactions.filter(t => t.type === donutType)
+    const typeFilteredTransactions = filteredTransactions.filter(t => t.type === donutType)
     
     const categoryTotals = typeFilteredTransactions.reduce((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + parseFloat(t.amount || 0)
@@ -119,40 +291,39 @@ export default function Dashboard({ transactions = [], categories = [] }) {
         color: catObj ? catObj.color : '#888888'
       }
     })
-  }, [currentMonthTransactions, donutType, categories])
+  }, [filteredTransactions, donutType, categories])
 
   // --- BUDGET LIMITS & TARGETS WATCHDOG ---
   const expenseCheckpoints = useMemo(() => {
-    // Pre-group transactions of the current month by category for quick lookup
     const categorySpent = {}
-    transactions.forEach(t => {
-      const d = new Date(t.date)
-      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth && (t.type === 'outflow' || !t.type)) {
+    filteredTransactions.forEach(t => {
+      if (t.type === 'outflow' || !t.type) {
         categorySpent[t.category] = (categorySpent[t.category] || 0) + parseFloat(t.amount || 0)
       }
     })
 
     return categories
-      .filter(cat => cat.type === 'outflow' || !cat.type) // default to outflow
+      .filter(cat => cat.type === 'outflow' || !cat.type)
       .map(cat => {
         const spent = categorySpent[cat.name] || 0
-        const percentage = cat.budget > 0 ? (spent / cat.budget) * 100 : 0
+        // Scale budgets by 12 for yearly views
+        const budgetLimit = selectedPeriod.type === 'year' ? cat.budget * 12 : cat.budget
+        const percentage = budgetLimit > 0 ? (spent / budgetLimit) * 100 : 0
         return {
           ...cat,
+          budgetLimit,
           spent,
           percentage: Math.min(100, percentage),
           rawPercentage: percentage,
-          overrun: spent > cat.budget
+          overrun: spent > budgetLimit
         }
       })
-  }, [transactions, categories, currentYear, currentMonth])
+  }, [filteredTransactions, categories, selectedPeriod])
 
   const incomeCheckpoints = useMemo(() => {
-    // Pre-group transactions of the current month by category for quick lookup
     const categoryEarned = {}
-    transactions.forEach(t => {
-      const d = new Date(t.date)
-      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth && t.type === 'inflow') {
+    filteredTransactions.forEach(t => {
+      if (t.type === 'inflow') {
         categoryEarned[t.category] = (categoryEarned[t.category] || 0) + parseFloat(t.amount || 0)
       }
     })
@@ -161,16 +332,19 @@ export default function Dashboard({ transactions = [], categories = [] }) {
       .filter(cat => cat.type === 'inflow')
       .map(cat => {
         const earned = categoryEarned[cat.name] || 0
-        const percentage = cat.budget > 0 ? (earned / cat.budget) * 100 : 0
+        // Scale revenue targets by 12 for yearly views
+        const targetLimit = selectedPeriod.type === 'year' ? cat.budget * 12 : cat.budget
+        const percentage = targetLimit > 0 ? (earned / targetLimit) * 100 : 0
         return {
           ...cat,
+          targetLimit,
           earned,
           percentage: Math.min(100, percentage),
           rawPercentage: percentage,
-          completed: earned >= cat.budget
+          completed: earned >= targetLimit
         }
       })
-  }, [transactions, categories, currentYear, currentMonth])
+  }, [filteredTransactions, categories, selectedPeriod])
 
   // Helper for rendering currency
   const formatCurrency = (val) => {
@@ -180,6 +354,26 @@ export default function Dashboard({ transactions = [], categories = [] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       
+      {/* --- DASHBOARD FILTER BAR --- */}
+      <div className="card" style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Calendar size={20} style={{ color: 'var(--primary)' }} />
+          <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Analysis Period:</span>
+        </div>
+        <select 
+          className="select-filter" 
+          value={selectedPeriodKey} 
+          onChange={(e) => setSelectedPeriodKey(e.target.value)}
+          style={{ minWidth: '220px', cursor: 'pointer' }}
+        >
+          {availablePeriods.map(p => (
+            <option key={p.key} value={p.key}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* --- KPI METRICS GRID --- */}
       <section className="metrics-grid">
         
@@ -231,21 +425,38 @@ export default function Dashboard({ transactions = [], categories = [] }) {
           </div>
         </div>
 
-        {/* Card 4: Daily Expense Burn */}
-        <div className="card metric-card">
-          <div className="metric-info">
-            <span className="metric-label">Daily Outflow Burn</span>
-            <span className="metric-value">
-              {formatCurrency(dailyOutflowAverage)}
-            </span>
-            <span className="metric-subtext">
-              Tracked across {daysPassed} days
-            </span>
+        {/* Card 4: Daily Expense Burn or Monthly Average */}
+        {selectedPeriod.type === 'month' ? (
+          <div className="card metric-card">
+            <div className="metric-info">
+              <span className="metric-label">Daily Outflow Burn</span>
+              <span className="metric-value">
+                {formatCurrency(dailyOutflowAverage)}
+              </span>
+              <span className="metric-subtext">
+                Tracked across {daysPassed} days
+              </span>
+            </div>
+            <div className="metric-icon-box" style={{ color: 'var(--secondary)', borderLeft: '3px solid var(--secondary)' }}>
+              <Calendar size={24} />
+            </div>
           </div>
-          <div className="metric-icon-box" style={{ color: 'var(--secondary)', borderLeft: '3px solid var(--secondary)' }}>
-            <Calendar size={24} />
+        ) : (
+          <div className="card metric-card">
+            <div className="metric-info">
+              <span className="metric-label">Monthly Average Burn</span>
+              <span className="metric-value">
+                {formatCurrency(monthlyOutflowAverage)}
+              </span>
+              <span className="metric-subtext">
+                Tracked across {monthsPassed} months
+              </span>
+            </div>
+            <div className="metric-icon-box" style={{ color: 'var(--secondary)', borderLeft: '3px solid var(--secondary)' }}>
+              <Calendar size={24} />
+            </div>
           </div>
-        </div>
+        )}
 
       </section>
 
@@ -257,13 +468,13 @@ export default function Dashboard({ transactions = [], categories = [] }) {
           <div className="chart-header">
             <h3>Cumulative Cash Flow</h3>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-              Current Calendar Month
+              {selectedPeriod.label}
             </span>
           </div>
           <div className="chart-container">
-            {dailyTrendData.length > 0 ? (
+            {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorInflow" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--success)" stopOpacity={0.3}/>
@@ -275,7 +486,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                     </linearGradient>
                   </defs>
                   <XAxis 
-                    dataKey="day" 
+                    dataKey="label" 
                     stroke="var(--text-muted)" 
                     fontSize={11}
                     tickLine={false}
@@ -294,7 +505,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                       color: 'var(--text-primary)'
                     }}
                     formatter={(value) => formatCurrency(value)}
-                    labelFormatter={(label) => `Day ${label} of Month`}
+                    labelFormatter={(label) => selectedPeriod.type === 'year' ? `Month: ${label}` : `Day ${label} of Month`}
                   />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
                   <Area 
@@ -319,7 +530,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
               </ResponsiveContainer>
             ) : (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                No transaction data available for this month.
+                No transaction data available for this period.
               </div>
             )}
           </div>
@@ -368,13 +579,13 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={65}
-                      outerRadius={85}
-                      paddingAngle={4}
-                      dataKey="value"
+                       data={pieData}
+                       cx="50%"
+                       cy="50%"
+                       innerRadius={65}
+                       outerRadius={85}
+                       paddingAngle={4}
+                       dataKey="value"
                     >
                       {pieData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -425,7 +636,9 @@ export default function Dashboard({ transactions = [], categories = [] }) {
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="chart-header">
             <h3>Outflow Allowance Limits</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Monthly Caps</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              {selectedPeriod.type === 'year' ? 'Yearly Caps' : 'Monthly Caps'}
+            </span>
           </div>
           <div className="budget-progress-list">
             {expenseCheckpoints.map(cat => (
@@ -441,7 +654,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                     )}
                   </span>
                   <span style={{ color: cat.overrun ? 'var(--danger)' : 'var(--text-secondary)' }}>
-                    {formatCurrency(cat.spent)} / {formatCurrency(cat.budget)}
+                    {formatCurrency(cat.spent)} / {formatCurrency(cat.budgetLimit)}
                   </span>
                 </div>
                 <div className="budget-progress-bar-bg">
@@ -462,7 +675,9 @@ export default function Dashboard({ transactions = [], categories = [] }) {
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="chart-header">
             <h3>Inflow Revenue Targets</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Monthly Goals</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              {selectedPeriod.type === 'year' ? 'Yearly Goals' : 'Monthly Goals'}
+            </span>
           </div>
           <div className="budget-progress-list">
             {incomeCheckpoints.map(cat => (
@@ -478,7 +693,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                     )}
                   </span>
                   <span style={{ color: cat.completed ? 'var(--success)' : 'var(--text-secondary)' }}>
-                    {formatCurrency(cat.earned)} / {formatCurrency(cat.budget)}
+                    {formatCurrency(cat.earned)} / {formatCurrency(cat.targetLimit)}
                   </span>
                 </div>
                 <div className="budget-progress-bar-bg">
