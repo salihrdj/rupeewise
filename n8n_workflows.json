@@ -1,0 +1,539 @@
+{
+  "name": "Sovereign Spend Expenditure Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "expenditures",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false,
+          "respondToOptions": true,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "={{ ($headers.origin || $headers.Origin || '').endsWith('.vercel.app') || ($headers.origin || $headers.Origin || '').endsWith('.azurewebsites.net') || ($headers.origin || $headers.Origin || '').startsWith('http://localhost') || ($headers.origin || $headers.Origin || '').startsWith('http://127.0.0.1') ? ($headers.origin || $headers.Origin) : 'https://rupeewise-omega.vercel.app' }}"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, X-API-KEY, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.headers['x-api-key'] || $json.headers['authorization']}}",
+              "operation": "equal",
+              "value2": "YOUR_SECRET_API_KEY_HERE"
+            }
+          ]
+        }
+      },
+      "id": "auth-check",
+      "name": "Verify Auth Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"error\": \"Unauthorized: Missing or invalid API key.\"\n}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "auth-failed",
+      "name": "Respond 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  const body = item.json.body || item.json;\n  item.json.action = body.action || 'fetch';\n  item.json.data = body.data || null;\n}\nreturn $input.all();"
+      },
+      "id": "normalize-payload",
+      "name": "Normalize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$json.action}}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "fetch",
+              "operation": "equal"
+            },
+            {
+              "value2": "add",
+              "operation": "equal"
+            },
+            {
+              "value2": "update",
+              "operation": "equal"
+            },
+            {
+              "value2": "delete",
+              "operation": "equal"
+            }
+          ]
+        },
+        "fallbackOutput": 0
+      },
+      "id": "action-router",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        680,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "id": "google-sheets-read",
+      "name": "Read Transactions",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        250
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Categories",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "id": "google-sheets-read-categories",
+      "name": "Read Categories",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        380
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  transactions: (() => { try { const raw = $items(\"Read Transactions\"); if (!raw || raw.length === 0) return null; const first = raw[0].json; if (first && (first.error || (first.message && first.status === \"rejected\"))) return null; return raw.map(i => { const tx = i.json; return { id: tx.ID, date: tx.Date, type: tx.Type || \"outflow\", category: tx.Category, amount: Number(tx.Amount) || 0, description: tx.Description || \"\", paymentMethod: tx[\"Payment Method\"] || \"Cash\", status: tx.Status || \"Cleared\", createdAt: tx[\"Created At\"] || new Date().toISOString(), updatedAt: tx[\"Updated At\"] || new Date().toISOString(), sourceDevice: tx[\"Source Device\"] || \"Desktop\" }; }).filter(tx => tx && tx.id); } catch(e) { return null; } })(),\n  categories: (() => { try { const raw = $items(\"Read Categories\"); if (!raw || raw.length === 0) return null; const first = raw[0].json; if (first && (first.error || (first.message && first.status === \"rejected\"))) return null; return raw.map(i => { const c = i.json; return { name: c && c.name, budget: c ? Number(c.budget) || 0 : 0, color: c && c.color || \"#6366f1\", type: c && c.type || \"outflow\" }; }).filter(cat => cat && cat.name); } catch(e) { return null; } })(),\n  syncErrors: {\n    transactions: (() => { try { const raw = $items(\"Read Transactions\"); if (!raw || raw.length === 0) return true; const first = raw[0].json; if (first && (first.error || (first.message && first.status === \"rejected\"))) return true; return false; } catch(e) { return true; } })(),\n    categories: (() => { try { const raw = $items(\"Read Categories\"); if (!raw || raw.length === 0) return true; const first = raw[0].json; if (first && (first.error || (first.message && first.status === \"rejected\"))) return true; return false; } catch(e) { return true; } })\n  }\n}) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-fetch",
+      "name": "Respond Fetch Data",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{$json.data.id}}",
+            "Date": "={{$json.data.date}}",
+            "Type": "={{$json.data.type}}",
+            "Category": "={{$json.data.category}}",
+            "Amount": "={{$json.data.amount}}",
+            "Description": "={{$json.data.description}}",
+            "Payment Method": "={{$json.data.paymentMethod}}",
+            "Status": "={{$json.data.status}}",
+            "Created At": "={{$json.data.createdAt}}",
+            "Updated At": "={{$json.data.updatedAt}}",
+            "Source Device": "={{$json.data.sourceDevice}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets-append",
+      "name": "Append Transaction",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        500
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "columnToMatchOn": "ID",
+        "valueToMatchOn": "={{$json.data.id}}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{$json.data.date}}",
+            "Type": "={{$json.data.type}}",
+            "Category": "={{$json.data.category}}",
+            "Amount": "={{$json.data.amount}}",
+            "Description": "={{$json.data.description}}",
+            "Payment Method": "={{$json.data.paymentMethod}}",
+            "Status": "={{$json.data.status}}",
+            "Updated At": "={{$json.data.updatedAt}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets-update",
+      "name": "Update Transaction",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        620
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "column": "ID",
+              "value": "={{$json.data.id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "google-sheets-get-delete",
+      "name": "Get Row to Delete",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        740
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRowsOrColumns",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Transactions",
+          "mode": "name"
+        },
+        "rowsOrColumns": "rows",
+        "startIndex": "={{$json['row_number']}}",
+        "numberToDelete": 1
+      },
+      "id": "google-sheets-delete-row",
+      "name": "Delete rows or columns from sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1080,
+        740
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": true,\n  \"message\": \"Operation executed successfully\"\n}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Verify Auth Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Auth Key": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Read Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Row to Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Transactions": {
+      "main": [
+        [
+          {
+            "node": "Read Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Categories": {
+      "main": [
+        [
+          {
+            "node": "Respond Fetch Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Transaction": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Transaction": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Row to Delete": {
+      "main": [
+        [
+          {
+            "node": "Delete rows or columns from sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete rows or columns from sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

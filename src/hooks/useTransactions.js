@@ -1,0 +1,118 @@
+import { useState, useCallback, useEffect } from 'react'
+import { safeGetItem, safeSetItem, addPendingMutation, getOfflineQueueStatus } from '../utils/storage'
+import { validateTransactions } from '../schemas/n8nResponse'
+
+export function useTransactions() {
+  const [transactions, setTransactions] = useState([])
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  useEffect(() => {
+    const initTransactions = () => {
+      const localTxs = safeGetItem('spend_transactions')
+      if (localTxs) {
+        try {
+          const parsedTxs = JSON.parse(localTxs)
+          const validationResult = validateTransactions(parsedTxs)
+          if (validationResult.success) {
+            const filteredTxs = validationResult.data.filter(
+              t => t && typeof t.id === 'string' && !t.id.startsWith('tx-sample-')
+            ).filter(t => t && t.syncPending !== 'delete')
+            setTransactions(filteredTxs)
+            safeSetItem('spend_transactions', JSON.stringify(validationResult.data))
+          } else {
+            console.error('Transaction validation failed:', validationResult.error)
+            setTransactions([])
+            safeSetItem('spend_transactions', JSON.stringify([]))
+          }
+        } catch (err) {
+          console.error('Failed to parse transactions:', err)
+          setTransactions([])
+          safeSetItem('spend_transactions', JSON.stringify([]))
+        }
+      } else {
+        setTransactions([])
+        safeSetItem('spend_transactions', JSON.stringify([]))
+      }
+      setIsInitialized(true)
+    }
+    initTransactions()
+  }, [])
+
+  const addTransaction = useCallback(async (tx) => {
+    const newTx = {
+      ...tx,
+      id: crypto.randomUUID ? crypto.randomUUID() : `tx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      syncPending: 'add',
+      version: 1,
+    }
+
+    const nextTxs = [newTx, ...transactions]
+    setTransactions(nextTxs.filter(t => t && t.syncPending !== 'delete'))
+    
+    const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
+    const nextAllTxs = [newTx, ...allTxs]
+    safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
+    
+    addPendingMutation({ ...newTx, syncPending: undefined })
+    
+    return newTx
+  }, [transactions])
+
+  const updateTransaction = useCallback(async (id, updates) => {
+    const existingTx = transactions.find(t => t.id === id)
+    const nextVersion = (existingTx?.version || 0) + 1
+    
+    const updatedTx = {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      syncPending: 'update',
+      version: nextVersion,
+    }
+
+    const nextTxs = transactions.map(t => t.id === id ? updatedTx : t)
+    setTransactions(nextTxs.filter(t => t && t.syncPending !== 'delete'))
+    
+    const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
+    const nextAllTxs = allTxs.map(t => t.id === id ? updatedTx : t)
+    safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
+    
+    addPendingMutation({ ...updatedTx, syncPending: undefined })
+  }, [transactions])
+
+  const deleteTransaction = useCallback(async (id) => {
+    const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
+    const txToDelete = allTxs.find(t => t.id === id)
+    if (!txToDelete) return
+
+    if (txToDelete.syncPending === 'add') {
+      const nextTxs = transactions.filter(t => t.id !== id)
+      setTransactions(nextTxs)
+      const nextAllTxs = allTxs.filter(t => t.id !== id)
+      safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
+      return
+    }
+
+    const nextTxs = transactions.filter(t => t.id !== id)
+    setTransactions(nextTxs)
+    const nextAllTxs = allTxs.map(t => t.id === id ? { ...txToDelete, syncPending: 'delete' } : t)
+    safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
+    
+    addPendingMutation({ ...txToDelete, syncPending: 'delete' })
+  }, [transactions])
+
+  const getQueueStatus = useCallback(() => {
+    return getOfflineQueueStatus()
+  }, [])
+
+  return {
+    transactions,
+    setTransactions,
+    isInitialized,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+    getQueueStatus,
+  }
+}
