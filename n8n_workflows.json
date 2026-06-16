@@ -108,6 +108,10 @@
             {
               "value2": "delete",
               "operation": "equal"
+            },
+            {
+              "value2": "update_categories",
+              "operation": "equal"
             }
           ]
         },
@@ -372,6 +376,88 @@
     },
     {
       "parameters": {
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Categories",
+          "mode": "name"
+        }
+      },
+      "id": "clear-categories",
+      "name": "Clear Categories",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        900,
+        860
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $items(\"Normalize Payload\")[0].json;\nconst categories = input.data || [];\nreturn categories.map(c => ({ json: c }));"
+      },
+      "id": "get-categories-list",
+      "name": "Get Categories List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ZeZVwzxfHltCguvPeMy3_UcYMB_sBaK2FSgnbpC-MW4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Categories",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{$json.name}}",
+            "budget": "={{$json.budget}}",
+            "color": "={{$json.color}}",
+            "type": "={{$json.type}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "append-category-row",
+      "name": "Append Category Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1260,
+        860
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-creds-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "{\n  \"success\": true,\n  \"message\": \"Operation executed successfully\"\n}",
         "options": {
@@ -391,7 +477,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1200,
+        1450,
         620
       ]
     }
@@ -466,6 +552,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Clear Categories",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -525,6 +618,39 @@
       ]
     },
     "Delete rows or columns from sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Categories": {
+      "main": [
+        [
+          {
+            "node": "Get Categories List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Categories List": {
+      "main": [
+        [
+          {
+            "node": "Append Category Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Category Row": {
       "main": [
         [
           {
