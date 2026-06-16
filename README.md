@@ -4,7 +4,7 @@ RupeeWise is a premium, secure, and mobile-friendly expenditure and inflow track
 
 ---
 
-## 🌟 Visual & Interactive Features
+## Visual & Interactive Features
 
 - **Dynamic Financial Dashboard**: Visualizes your monthly spent vs. budget, daily burn rate, and top categories using interactive charts (`recharts`).
 - **Flexible Data Journal**: Sort, search, and filter expenditures by description, category, payment method, or date range on both desktop and mobile layouts.
@@ -14,7 +14,7 @@ RupeeWise is a premium, secure, and mobile-friendly expenditure and inflow track
 
 ---
 
-## ⚙️ How to Set Up n8n and Sync your Google Sheet
+## How to Set Up n8n and Sync your Google Sheet
 
 ### 1. Import the Workflow
 1. Open your n8n workspace and create a new workflow.
@@ -41,7 +41,7 @@ RupeeWise is a premium, secure, and mobile-friendly expenditure and inflow track
 
 ---
 
-## 🛡️ Security & ISO Compliance Standards
+##  Security & ISO Compliance Standards
 
 To protect your financial logs and align with standard enterprise security parameters (such as ISO/IEC 27001 and OWASP rules), we implemented the following:
 
@@ -55,7 +55,7 @@ To protect your financial logs and align with standard enterprise security param
 
 ---
 
-## ⚡ Performance Optimizations & PWA Offline Sync
+##  Performance Optimizations & PWA Offline Sync
 
 The application includes advanced performance and network layers to support poor internet connectivity and offline states:
 
@@ -65,7 +65,7 @@ The application includes advanced performance and network layers to support poor
 
 ---
 
-## 💻 Running the App Locally
+##  Running the App Locally
 
 ### 1. Install Dependencies
 ```bash
