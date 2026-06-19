@@ -220,9 +220,16 @@ export default function TransactionTable({
                     </td>
                     <td>{tx.paymentMethod}</td>
                     <td>
-                      <span className={`badge ${tx.status === 'Cleared' ? 'badge-success' : 'badge-warning'}`}>
-                        {tx.status}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                        <span className={`badge ${tx.status === 'Cleared' ? 'badge-success' : 'badge-warning'}`}>
+                          {tx.status}
+                        </span>
+                        {tx.syncPending && (
+                          <span className="badge badge-warning" style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', whiteSpace: 'nowrap' }} title="Pending sync with Google Sheets">
+                            ⏳ Pending Sync
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
@@ -285,10 +292,15 @@ export default function TransactionTable({
                   <span className="tx-card-amount" style={{ color: isInflow ? 'var(--success)' : 'var(--text-primary)' }}>
                     {isInflow ? '+' : '-'} {formatCurrency(tx.amount)}
                   </span>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <span className={`badge ${tx.status === 'Cleared' ? 'badge-success' : 'badge-warning'}`} style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem' }}>
                       {tx.status}
                     </span>
+                    {tx.syncPending && (
+                      <span className="badge badge-warning" style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem' }} title="Pending sync with Google Sheets">
+                        ⏳ Pending Sync
+                      </span>
+                    )}
                     <button 
                       className="btn btn-secondary btn-icon-only btn-sm"
                       onClick={() => onEdit(tx)}
