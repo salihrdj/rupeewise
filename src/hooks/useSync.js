@@ -219,6 +219,12 @@ export function useSync({
 
         for (const localTx of localTxs) {
           if (!remoteTxs.find(t => t.id === localTx.id)) {
+            // Self-healing: if a transaction is local but missing from the spreadsheet,
+            // and has no pending sync flag, mark it as pending 'add' so it gets uploaded.
+            if (!localTx.syncPending) {
+              localTx.syncPending = 'add';
+              updatedAny = true;
+            }
             mergedTxs.push(localTx)
           }
         }
