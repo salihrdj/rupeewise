@@ -223,7 +223,6 @@ export function useSync({
             // and has no pending sync flag, mark it as pending 'add' so it gets uploaded.
             if (!localTx.syncPending) {
               localTx.syncPending = 'add';
-              updatedAny = true;
             }
             mergedTxs.push(localTx)
           }
