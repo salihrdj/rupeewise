@@ -14,6 +14,7 @@ import {
 import { useSettings } from '../contexts/SettingsContext'
 import { fetchWithTimeout } from '../utils/fetchWithTimeout'
 import { safeSetItem } from '../utils/storage'
+import { validateTransactions, validateCategories } from '../schemas/n8nResponse'
 
 export default function Settings({
   onSync,
@@ -128,6 +129,11 @@ export default function Settings({
     const file = e.target.files[0]
     if (!file) return
 
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Backup file is too large. Max size allowed is 5MB.')
+      return
+    }
+
     fileReader.onload = (event) => {
       try {
         const importedData = JSON.parse(event.target.result)
@@ -136,11 +142,27 @@ export default function Settings({
           return
         }
 
+        // Run structural validation on the backup data
+        const txValidation = validateTransactions(importedData.transactions)
+        const catValidation = validateCategories(importedData.categories)
+
+        if (!txValidation.success) {
+          console.error('Backup transactions validation failed:', txValidation.error)
+          alert('Failed to import backup: transactions schema is invalid or corrupted.')
+          return
+        }
+
+        if (!catValidation.success) {
+          console.error('Backup categories validation failed:', catValidation.error)
+          alert('Failed to import backup: categories schema is invalid or corrupted.')
+          return
+        }
+
         if (window.confirm(`Importing backup will replace all current data. Are you sure you want to proceed?`)) {
-          setTransactions(importedData.transactions)
-          setCategories(importedData.categories)
-          safeSetItem('spend_transactions', JSON.stringify(importedData.transactions))
-          safeSetItem('spend_categories', JSON.stringify(importedData.categories))
+          setTransactions(txValidation.data)
+          setCategories(catValidation.data)
+          safeSetItem('spend_transactions', JSON.stringify(txValidation.data))
+          safeSetItem('spend_categories', JSON.stringify(catValidation.data))
           alert('Database restored successfully!')
         }
       } catch (err) {

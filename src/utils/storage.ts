@@ -1,3 +1,5 @@
+import { encryptText, decryptText } from './storageEncryption';
+
 const PENDING_KEY = 'spend_pending_mutations';
 const TRANSACTIONS_KEY = 'spend_transactions';
 const CATEGORIES_KEY = 'spend_categories';
@@ -19,7 +21,10 @@ function notifyQueueWarning(count) {
 
 export function safeSetItem(key: string, value: string): boolean {
   try {
-    localStorage.setItem(key, value);
+    const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+      ? encryptText(value)
+      : value;
+    localStorage.setItem(key, valueToStore);
     return true;
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -29,7 +34,10 @@ export function safeSetItem(key: string, value: string): boolean {
         purgeOldPending();
       }
       try {
-        localStorage.setItem(key, value);
+        const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+          ? encryptText(value)
+          : value;
+        localStorage.setItem(key, valueToStore);
         return true;
       } catch {
         if (typeof window !== 'undefined') {
@@ -44,7 +52,11 @@ export function safeSetItem(key: string, value: string): boolean {
 
 export function safeGetItem(key: string): string | null {
   try {
-    return localStorage.getItem(key);
+    const val = localStorage.getItem(key);
+    if (!val) return null;
+    return (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+      ? decryptText(val)
+      : val;
   } catch {
     return null;
   }
@@ -61,10 +73,10 @@ export function safeRemoveItem(key: string): boolean {
 
 function purgeOldPending(): void {
   try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    const pending = JSON.parse(safeGetItem(PENDING_KEY) || '[]');
     if (pending.length > MAX_PENDING) {
       const trimmed = pending.slice(-MAX_PENDING);
-      localStorage.setItem(PENDING_KEY, JSON.stringify(trimmed));
+      safeSetItem(PENDING_KEY, JSON.stringify(trimmed));
     }
   } catch {
   }
@@ -72,10 +84,10 @@ function purgeOldPending(): void {
 
 function purgeOldTransactions(): void {
   try {
-    const transactions = JSON.parse(localStorage.getItem(TRANSACTIONS_KEY) || '[]');
+    const transactions = JSON.parse(safeGetItem(TRANSACTIONS_KEY) || '[]');
     if (transactions.length > MAX_TRANSACTIONS) {
       const trimmed = transactions.slice(-MAX_TRANSACTIONS);
-      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(trimmed));
+      safeSetItem(TRANSACTIONS_KEY, JSON.stringify(trimmed));
     }
   } catch {
   }
@@ -83,7 +95,7 @@ function purgeOldTransactions(): void {
 
 export function addPendingMutation(mutation: object): void {
   try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    const pending = JSON.parse(safeGetItem(PENDING_KEY) || '[]');
     pending.push({ ...mutation, timestamp: Date.now() });
     if (pending.length > MAX_PENDING) {
       pending.shift()
@@ -98,7 +110,7 @@ export function addPendingMutation(mutation: object): void {
 
 export function getPendingMutations(): object[] {
   try {
-    return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    return JSON.parse(safeGetItem(PENDING_KEY) || '[]');
   } catch {
     return [];
   }
@@ -110,7 +122,7 @@ export function clearPendingMutations(): void {
 
 export function removePendingMutation(index: number): void {
   try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    const pending = JSON.parse(safeGetItem(PENDING_KEY) || '[]');
     if (index >= 0 && index < pending.length) {
       pending.splice(index, 1);
       safeSetItem(PENDING_KEY, JSON.stringify(pending));
@@ -121,7 +133,7 @@ export function removePendingMutation(index: number): void {
 
 export function getOfflineQueueStatus() {
   try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    const pending = JSON.parse(safeGetItem(PENDING_KEY) || '[]');
     return {
       count: pending.length,
       maxSize: MAX_PENDING,

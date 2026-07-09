@@ -218,8 +218,14 @@ export default function TransactionForm({
               placeholder={type === 'inflow' ? 'e.g. Salary, Client Payout, Dividends' : 'e.g. Weekly Groceries, Gas, Dinner'}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
               required
             />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {description.length} / 500 characters
+              </span>
+            </div>
           </div>
 
           <div className="form-row">
