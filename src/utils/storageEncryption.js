@@ -1,7 +1,6 @@
 import CryptoJS from 'crypto-js';
 
 const KEY_NAME = 'spend_storage_key';
-const N8N_MODE_KEY = 'spend_n8n_mode';
 
 function generateRandomKey() {
   const arr = new Uint8Array(32);
@@ -19,41 +18,36 @@ function generateRandomKey() {
 function getEncryptionKey() {
   if (typeof window === 'undefined') return null;
 
-  const isN8nMode = localStorage.getItem(N8N_MODE_KEY) === 'true';
-
-  if (isN8nMode) {
-    // n8n mode: keep key in sessionStorage (wiped when tab closes)
-    let key = sessionStorage.getItem(KEY_NAME);
-    if (!key) {
-      // Migrate key if it existed in offline mode
-      const legacyKey = localStorage.getItem(KEY_NAME);
-      if (legacyKey) {
-        key = legacyKey;
-        sessionStorage.setItem(KEY_NAME, key);
-        localStorage.removeItem(KEY_NAME);
-      } else {
-        key = generateRandomKey();
-        sessionStorage.setItem(KEY_NAME, key);
-      }
+  // Always store key in localStorage for both n8n and offline modes.
+  // This ensures offline cache persists and prevents key loss when tabs are closed.
+  let key = localStorage.getItem(KEY_NAME);
+  if (!key) {
+    // Migrate key if it existed in sessionStorage
+    const legacyKey = sessionStorage.getItem(KEY_NAME);
+    if (legacyKey) {
+      key = legacyKey;
+      localStorage.setItem(KEY_NAME, key);
+      sessionStorage.removeItem(KEY_NAME);
+    } else {
+      key = generateRandomKey();
+      localStorage.setItem(KEY_NAME, key);
     }
-    return key;
-  } else {
-    // Offline mode: keep key in localStorage so data persists across browser restarts
-    let key = localStorage.getItem(KEY_NAME);
-    if (!key) {
-      // Migrate key if it existed in sessionStorage
-      const legacyKey = sessionStorage.getItem(KEY_NAME);
-      if (legacyKey) {
-        key = legacyKey;
-        localStorage.setItem(KEY_NAME, key);
-        sessionStorage.removeItem(KEY_NAME);
-      } else {
-        key = generateRandomKey();
-        localStorage.setItem(KEY_NAME, key);
-      }
-    }
-    return key;
   }
+  return key;
+}
+
+function isJsonString(str) {
+  if (!str) return false;
+  const trimmed = str.trim();
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /**
@@ -77,22 +71,30 @@ export function encryptText(text) {
  * Decrypts a string synchronously using CryptoJS AES.
  * Supports fallback to plaintext if decryption fails (useful for migration).
  * @param {string} ciphertext - The AES ciphertext to decrypt.
- * @returns {string} The decrypted plaintext string.
+ * @returns {string|null} The decrypted plaintext string or null if decryption/validation fails.
  */
 export function decryptText(ciphertext) {
   if (!ciphertext) return '';
   const key = getEncryptionKey();
   if (!key) return ciphertext;
+  
   try {
     const bytes = CryptoJS.AES.decrypt(ciphertext, key);
     const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    if (!decrypted) {
-      // Fallback: If decryption output is empty, it might be stored as plaintext (legacy data)
-      return ciphertext;
+    
+    if (decrypted && isJsonString(decrypted)) {
+      return decrypted;
     }
-    return decrypted;
   } catch (e) {
-    // Fallback to original ciphertext if it fails or throws (legacy data)
+    // Decryption failed or threw an error
+  }
+
+  // Fallback check: is the ciphertext itself already valid JSON? (legacy plaintext data)
+  if (isJsonString(ciphertext)) {
     return ciphertext;
   }
+
+  // If we reach here, the data is encrypted with a different/lost key or corrupted.
+  // Return null instead of ciphertext to avoid JSON.parse syntax errors.
+  return null;
 }
