@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { safeGetItem, safeSetItem } from '../utils/storage'
 import { validateDebts } from '../schemas/n8nResponse'
 
@@ -31,9 +31,13 @@ function advanceOneMonth(dateStr, emiDay) {
 export function useDebts(addTransaction, showAlert) {
   const [debts, setDebts] = useState([])
   const [isInitialized, setIsInitialized] = useState(false)
+  const hasRunRef = useRef(false)
 
   useEffect(() => {
     const initDebts = async () => {
+      if (hasRunRef.current) return
+      hasRunRef.current = true
+      
       const localDebts = safeGetItem('spend_debts')
       let loadedDebts = []
       

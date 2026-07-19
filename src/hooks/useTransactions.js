@@ -48,8 +48,7 @@ export function useTransactions() {
       version: 1,
     }
 
-    const nextTxs = [newTx, ...transactions]
-    setTransactions(nextTxs.filter(t => t && t.syncPending !== 'delete'))
+    setTransactions(prevTxs => [newTx, ...prevTxs].filter(t => t && t.syncPending !== 'delete'))
     
     const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
     const nextAllTxs = [newTx, ...allTxs]
@@ -58,10 +57,11 @@ export function useTransactions() {
     addPendingMutation({ ...newTx, syncPending: undefined })
     
     return newTx
-  }, [transactions])
+  }, [])
 
   const updateTransaction = useCallback(async (id, updates) => {
-    const existingTx = transactions.find(t => t.id === id)
+    const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
+    const existingTx = allTxs.find(t => t.id === id)
     const nextVersion = (existingTx?.version || 0) + 1
     
     const updatedTx = {
@@ -71,15 +71,13 @@ export function useTransactions() {
       version: nextVersion,
     }
 
-    const nextTxs = transactions.map(t => t.id === id ? updatedTx : t)
-    setTransactions(nextTxs.filter(t => t && t.syncPending !== 'delete'))
+    setTransactions(prevTxs => prevTxs.map(t => t.id === id ? updatedTx : t).filter(t => t && t.syncPending !== 'delete'))
     
-    const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
     const nextAllTxs = allTxs.map(t => t.id === id ? updatedTx : t)
     safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
     
     addPendingMutation({ ...updatedTx, syncPending: undefined })
-  }, [transactions])
+  }, [])
 
   const deleteTransaction = useCallback(async (id) => {
     const allTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
@@ -87,20 +85,18 @@ export function useTransactions() {
     if (!txToDelete) return
 
     if (txToDelete.syncPending === 'add') {
-      const nextTxs = transactions.filter(t => t.id !== id)
-      setTransactions(nextTxs)
+      setTransactions(prevTxs => prevTxs.filter(t => t.id !== id))
       const nextAllTxs = allTxs.filter(t => t.id !== id)
       safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
       return
     }
 
-    const nextTxs = transactions.filter(t => t.id !== id)
-    setTransactions(nextTxs)
+    setTransactions(prevTxs => prevTxs.filter(t => t.id !== id))
     const nextAllTxs = allTxs.map(t => t.id === id ? { ...txToDelete, syncPending: 'delete' } : t)
     safeSetItem('spend_transactions', JSON.stringify(nextAllTxs))
     
     addPendingMutation({ ...txToDelete, syncPending: 'delete' })
-  }, [transactions])
+  }, [])
 
   const getQueueStatus = useCallback(() => {
     return getOfflineQueueStatus()
