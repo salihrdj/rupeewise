@@ -3,6 +3,7 @@ import { encryptText, decryptText } from './storageEncryption';
 const PENDING_KEY = 'spend_pending_mutations';
 const TRANSACTIONS_KEY = 'spend_transactions';
 const CATEGORIES_KEY = 'spend_categories';
+const DEBTS_KEY = 'spend_debts';
 const MAX_PENDING = 500;
 const MAX_TRANSACTIONS = 10000;
 const QUEUE_WARNING_THRESHOLD = 450;
@@ -21,7 +22,7 @@ function notifyQueueWarning(count) {
 
 export function safeSetItem(key: string, value: string): boolean {
   try {
-    const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+    const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY || key === DEBTS_KEY)
       ? encryptText(value)
       : value;
     localStorage.setItem(key, valueToStore);
@@ -34,7 +35,7 @@ export function safeSetItem(key: string, value: string): boolean {
         purgeOldPending();
       }
       try {
-        const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+        const valueToStore = (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY || key === DEBTS_KEY)
           ? encryptText(value)
           : value;
         localStorage.setItem(key, valueToStore);
@@ -54,7 +55,7 @@ export function safeGetItem(key: string): string | null {
   try {
     const val = localStorage.getItem(key);
     if (!val) return null;
-    return (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY)
+    return (key === TRANSACTIONS_KEY || key === CATEGORIES_KEY || key === DEBTS_KEY)
       ? decryptText(val)
       : val;
   } catch {
