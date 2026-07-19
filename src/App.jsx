@@ -86,7 +86,7 @@ function AppInner() {
     addDebt,
     deleteDebt,
     settleDebt
-  } = useDebts()
+  } = useDebts(addTransaction, showAlert)
 
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -448,6 +448,7 @@ function AppInner() {
             deleteDebt={deleteDebt}
             settleDebt={settleDebt}
             showAlert={showAlert}
+            categories={categories}
           />
         )}
 

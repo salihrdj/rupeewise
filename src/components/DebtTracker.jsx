@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, Trash2, CheckCircle2, AlertTriangle, Calendar, Search, ArrowUpRight, ArrowDownLeft, Coins } from 'lucide-react'
 
-export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDebt, showAlert }) {
+export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDebt, showAlert, categories = [] }) {
   const [activeTab, setActiveTab] = useState('active') // 'active' or 'history'
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -13,6 +13,24 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState('')
   const [description, setDescription] = useState('')
+
+  // EMI Setup States
+  const [setupEmi, setSetupEmi] = useState(false)
+  const [emiAmount, setEmiAmount] = useState('')
+  const [emiDay, setEmiDay] = useState('5')
+  const [emiCategory, setEmiCategory] = useState('')
+
+  // Filter categories to outflow only
+  const outflowCategories = useMemo(() => {
+    return categories.filter(c => (c.type || 'outflow') === 'outflow')
+  }, [categories])
+
+  // Prefill default category for EMI outflow
+  useEffect(() => {
+    if (outflowCategories.length > 0 && !emiCategory) {
+      setEmiCategory(outflowCategories[0].name)
+    }
+  }, [outflowCategories, emiCategory])
 
   // Formula injection sanitation rules
   const sanitizeInput = (val) => {
@@ -92,6 +110,30 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
       return
     }
 
+    // Set up EMI configurations
+    let emiProps = {}
+    if (setupEmi) {
+      const parsedEmi = parseFloat(emiAmount)
+      if (isNaN(parsedEmi) || parsedEmi <= 0) {
+        if (showAlert) showAlert('Please enter a valid monthly EMI amount.', 'warning')
+        else alert('Invalid EMI amount.')
+        return
+      }
+
+      const parsedEmiDay = parseInt(emiDay, 10)
+      if (isNaN(parsedEmiDay) || parsedEmiDay < 1 || parsedEmiDay > 31) {
+        if (showAlert) showAlert('Please enter a payment day between 1 and 31.', 'warning')
+        else alert('Invalid payment day.')
+        return
+      }
+
+      emiProps = {
+        emiAmount: parsedEmi,
+        emiDay: parsedEmiDay,
+        emiCategory: emiCategory || (outflowCategories.length > 0 ? outflowCategories[0].name : 'Others')
+      }
+    }
+
     addDebt({
       name: cleanName,
       amount: parsedAmount,
@@ -99,7 +141,8 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
       date,
       dueDate: dueDate || null,
       description: cleanDescription,
-      status: 'pending'
+      status: 'pending',
+      ...emiProps
     })
 
     if (showAlert) {
@@ -113,6 +156,12 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
     setDate(new Date().toISOString().split('T')[0])
     setDueDate('')
     setDescription('')
+    setSetupEmi(false)
+    setEmiAmount('')
+    setEmiDay('5')
+    if (outflowCategories.length > 0) {
+      setEmiCategory(outflowCategories[0].name)
+    }
     setIsModalOpen(false)
   }
 
@@ -270,6 +319,11 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
         ) : (
           filteredDebts.map(d => {
             const overdue = isOverdue(d)
+            const original = parseFloat(d.originalAmount) || parseFloat(d.amount) || 0
+            const remaining = parseFloat(d.amount) || 0
+            const paid = Math.max(0, original - remaining)
+            const percent = original > 0 ? Math.round((paid / original) * 100) : 0
+
             return (
               <div 
                 key={d.id} 
@@ -306,7 +360,7 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                   
                   <div style={{ textAlign: 'right' }}>
                     <div className={`tx-card-amount ${d.type === 'loan' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '1.25rem', fontWeight: 700 }}>
-                      ₹{parseFloat(d.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </div>
                     <div className="tx-card-date" style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '0.25rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       <Calendar size={12} />
@@ -319,6 +373,25 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                     )}
                   </div>
                 </div>
+
+                {/* Monthly EMI Progress Indicators */}
+                {d.emiAmount && original > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.25rem', borderTop: '1px dashed var(--border-color)', paddingTop: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <span>Paid {formatCurrency(paid)} / {formatCurrency(original)}</span>
+                      <span style={{ fontWeight: 600 }}>{percent}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-card-hover)', borderRadius: '3px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                      <div style={{ width: `${percent}%`, height: '100%', backgroundColor: d.type === 'loan' ? 'var(--success)' : 'var(--warning)', borderRadius: '3px', transition: 'width var(--transition-normal)' }}></div>
+                    </div>
+                    {d.status === 'pending' && d.nextPaymentDate && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                        <Calendar size={12} style={{ color: 'var(--primary)' }} />
+                        <span>Next EMI: <strong>{d.nextPaymentDate}</strong> ({formatCurrency(d.emiAmount)}/mo)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                   {d.status === 'pending' && (
@@ -496,6 +569,70 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                   </span>
                 </div>
               </div>
+
+              {/* Optional EMI Scheduler Setup */}
+              <div className="form-group" style={{ marginTop: '0.5rem', borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={setupEmi} 
+                    onChange={(e) => setSetupEmi(e.target.checked)} 
+                    style={{ width: 'auto', transform: 'scale(1.1)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>Enable Automated Monthly EMI</span>
+                </label>
+              </div>
+
+              {setupEmi && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: 'var(--bg-card-hover)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginTop: '0.5rem' }}>
+                  
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="debt-emi-amt">Monthly EMI Amount (₹)</label>
+                      <input 
+                        id="debt-emi-amt"
+                        type="number" 
+                        step="0.01"
+                        className="form-input" 
+                        placeholder="0.00"
+                        value={emiAmount}
+                        onChange={(e) => setEmiAmount(e.target.value)}
+                        required={setupEmi}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="debt-emi-day">Payment Day of Month</label>
+                      <input 
+                        id="debt-emi-day"
+                        type="number" 
+                        min="1" 
+                        max="31"
+                        className="form-input" 
+                        placeholder="e.g. 5"
+                        value={emiDay}
+                        onChange={(e) => setEmiDay(e.target.value)}
+                        required={setupEmi}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="debt-emi-cat">EMI Outflow Category</label>
+                    <select 
+                      id="debt-emi-cat"
+                      className="form-input"
+                      value={emiCategory}
+                      onChange={(e) => setEmiCategory(e.target.value)}
+                      required={setupEmi}
+                    >
+                      {outflowCategories.map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                </div>
+              )}
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
