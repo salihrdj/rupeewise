@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, Trash2, CheckCircle2, AlertTriangle, Calendar, Search, ArrowUpRight, ArrowDownLeft, Coins } from 'lucide-react'
 
-export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDebt, showAlert, categories = [] }) {
+export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDebt, settleDebt, showAlert, categories = [] }) {
   const [activeTab, setActiveTab] = useState('active') // 'active' or 'history'
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -19,6 +19,79 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
   const [emiAmount, setEmiAmount] = useState('')
   const [emiDay, setEmiDay] = useState('5')
   const [emiCategory, setEmiCategory] = useState('')
+
+  // Edit EMI Modal states
+  const [isEmiModalOpen, setIsEmiModalOpen] = useState(false)
+  const [selectedDebtForEmi, setSelectedDebtForEmi] = useState(null)
+  const [configEmiAmount, setConfigEmiAmount] = useState('')
+  const [configEmiDay, setConfigEmiDay] = useState('5')
+  const [configEmiCategory, setConfigEmiCategory] = useState('')
+
+  const openConfigureEmiModal = (debt) => {
+    setSelectedDebtForEmi(debt)
+    setConfigEmiAmount(debt.emiAmount ? String(debt.emiAmount) : '')
+    setConfigEmiDay(debt.emiDay ? String(debt.emiDay) : '5')
+    setConfigEmiCategory(debt.emiCategory || (outflowCategories.length > 0 ? outflowCategories[0].name : 'Others'))
+    setIsEmiModalOpen(true)
+  }
+
+  const calculateFirstPaymentDate = (startDateStr, emiDayVal) => {
+    const d = new Date(startDateStr)
+    const year = d.getFullYear()
+    const month = d.getMonth()
+    const sameMonthDate = new Date(year, month, emiDayVal)
+    if (sameMonthDate >= d) {
+      return sameMonthDate.toISOString().split('T')[0]
+    } else {
+      const nextMonthDate = new Date(year, month + 1, emiDayVal)
+      return nextMonthDate.toISOString().split('T')[0]
+    }
+  }
+
+  const handleConfigureEmiSubmit = async (e) => {
+    e.preventDefault()
+    if (!selectedDebtForEmi) return
+
+    if (!configEmiAmount) {
+      // Disable EMI
+      await updateDebt(selectedDebtForEmi.id, {
+        emiAmount: null,
+        emiDay: null,
+        emiCategory: null,
+        nextPaymentDate: null
+      })
+      setIsEmiModalOpen(false)
+      if (showAlert) showAlert('EMI schedule disabled for this record.', 'info')
+      return
+    }
+
+    const parsedEmi = parseFloat(configEmiAmount)
+    if (isNaN(parsedEmi) || parsedEmi <= 0) {
+      if (showAlert) showAlert('Please enter a valid monthly EMI amount.', 'warning')
+      return
+    }
+
+    const parsedEmiDay = parseInt(configEmiDay, 10)
+    if (isNaN(parsedEmiDay) || parsedEmiDay < 1 || parsedEmiDay > 31) {
+      if (showAlert) showAlert('Please enter a payment day between 1 and 31.', 'warning')
+      return
+    }
+
+    let nextPaymentDate = selectedDebtForEmi.nextPaymentDate
+    if (!nextPaymentDate || selectedDebtForEmi.emiDay !== parsedEmiDay) {
+      nextPaymentDate = calculateFirstPaymentDate(selectedDebtForEmi.date, parsedEmiDay)
+    }
+
+    await updateDebt(selectedDebtForEmi.id, {
+      emiAmount: parsedEmi,
+      emiDay: parsedEmiDay,
+      emiCategory: configEmiCategory,
+      nextPaymentDate
+    })
+
+    setIsEmiModalOpen(false)
+    if (showAlert) showAlert('EMI schedule updated successfully!', 'success')
+  }
 
   // Filter categories to outflow only
   const outflowCategories = useMemo(() => {
@@ -404,6 +477,16 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                       <span>Mark Settled</span>
                     </button>
                   )}
+                  {d.status === 'pending' && (
+                    <button 
+                      className="btn btn-secondary" 
+                      onClick={() => openConfigureEmiModal(d)}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Coins size={14} style={{ color: 'var(--primary)' }} />
+                      <span>{d.emiAmount ? 'Edit EMI' : 'Set EMI'}</span>
+                    </button>
+                  )}
                   <button 
                     className="btn btn-secondary" 
                     onClick={() => {
@@ -641,6 +724,86 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Save Entry
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- CONFIGURE EMI MODAL OVERLAY --- */}
+      {isEmiModalOpen && (
+        <div 
+          className="modal-overlay active" 
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => { if (e.target.classList.contains('modal-overlay')) setIsEmiModalOpen(false) }}
+        >
+          <div className="modal-content">
+            
+            <div className="modal-header">
+              <h2>Configure Monthly EMI</h2>
+              <button className="close-btn" onClick={() => setIsEmiModalOpen(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleConfigureEmiSubmit}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Set up or edit automated monthly payouts for <strong>{selectedDebtForEmi?.name}</strong>. Leaving the EMI amount empty will disable the auto-payment schedule.
+              </p>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="config-emi-amt">Monthly EMI Amount (₹)</label>
+                  <input 
+                    id="config-emi-amt"
+                    type="number" 
+                    step="0.01"
+                    className="form-input" 
+                    placeholder="e.g. 5000"
+                    value={configEmiAmount}
+                    onChange={(e) => setConfigEmiAmount(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="config-emi-day">Payment Day of Month</label>
+                  <input 
+                    id="config-emi-day"
+                    type="number" 
+                    min="1" 
+                    max="31"
+                    className="form-input" 
+                    placeholder="e.g. 5"
+                    value={configEmiDay}
+                    onChange={(e) => setConfigEmiDay(e.target.value)}
+                    required={!!configEmiAmount}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="config-emi-cat">EMI Outflow Category</label>
+                <select 
+                  id="config-emi-cat"
+                  className="form-input"
+                  value={configEmiCategory}
+                  onChange={(e) => setConfigEmiCategory(e.target.value)}
+                  required={!!configEmiAmount}
+                >
+                  {outflowCategories.map(c => (
+                    <option key={c.name} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsEmiModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save EMI Configuration
                 </button>
               </div>
 

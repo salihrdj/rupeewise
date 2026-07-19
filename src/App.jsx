@@ -448,6 +448,7 @@ function AppInner() {
           <DebtTracker 
             debts={debts}
             addDebt={addDebt}
+            updateDebt={updateDebt}
             deleteDebt={deleteDebt}
             settleDebt={settleDebt}
             showAlert={showAlert}
