@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Calendar, Search, ArrowDownLeft, ArrowUpRight, Coins } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Calendar, Search, ArrowUpRight, ArrowDownLeft, Coins } from 'lucide-react'
 
 export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDebt, showAlert }) {
   const [activeTab, setActiveTab] = useState('active') // 'active' or 'history'
@@ -49,7 +49,7 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
       .filter(d => {
         const matchesTab = activeTab === 'active' ? d.status === 'pending' : d.status === 'settled'
         const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                             d.description.toLowerCase().includes(searchQuery.toLowerCase())
+                             (d.description && d.description.toLowerCase().includes(searchQuery.toLowerCase()))
         return matchesTab && matchesSearch
       })
       .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -121,135 +121,149 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
     return new Date(d.dueDate) < new Date(new Date().setHours(0, 0, 0, 0))
   }
 
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
       {/* --- DEBT SUMMARY KPIs --- */}
-      <div className="dashboard-grid">
+      <section className="metrics-grid">
         
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">Owed to You (Loans)</span>
-            <div className="icon-wrapper success">
-              <ArrowUpRight size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Owed to You (Loans)</span>
+            <span className="metric-value" style={{ color: 'var(--success)' }}>
+              {formatCurrency(metrics.owedToYou)}
+            </span>
+            <span className="metric-subtext positive" style={{ color: 'var(--success)' }}>
+              <ArrowUpRight size={14} /> Active receivables
+            </span>
           </div>
-          <div className="kpi-value text-success">
-            ₹{metrics.owedToYou.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="metric-icon-box" style={{ color: 'var(--success)', borderLeft: '3px solid var(--success)' }}>
+            <ArrowUpRight size={24} />
           </div>
-          <span className="kpi-subtext">Active receivables from others</span>
         </div>
 
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">You Owe (Debts)</span>
-            <div className="icon-wrapper warning">
-              <ArrowDownLeft size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">You Owe (Debts)</span>
+            <span className="metric-value" style={{ color: 'var(--warning)' }}>
+              {formatCurrency(metrics.youOwe)}
+            </span>
+            <span className="metric-subtext negative" style={{ color: 'var(--warning)' }}>
+              <ArrowDownLeft size={14} /> Active liabilities
+            </span>
           </div>
-          <div className="kpi-value text-warning">
-            ₹{metrics.youOwe.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="metric-icon-box" style={{ color: 'var(--warning)', borderLeft: '3px solid var(--warning)' }}>
+            <ArrowDownLeft size={24} />
           </div>
-          <span className="kpi-subtext">Active liabilities to clear</span>
         </div>
 
-        <div className="kpi-card">
-          <div className="kpi-header">
-            <span className="kpi-title">Net Debt Position</span>
-            <div className={`icon-wrapper ${metrics.netBalance >= 0 ? 'success' : 'danger'}`}>
-              <Coins size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Net Position</span>
+            <span className="metric-value" style={{ color: metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+              {formatCurrency(metrics.netBalance)}
+            </span>
+            <span className="metric-subtext" style={{ color: metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+              <Coins size={14} /> {metrics.netBalance >= 0 ? 'Net positive' : 'Net negative'}
+            </span>
           </div>
-          <div className={`kpi-value ${metrics.netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
-            {metrics.netBalance < 0 ? '-' : ''}₹{Math.abs(metrics.netBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="metric-icon-box" style={{ 
+            color: metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)', 
+            borderLeft: `3px solid ${metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)'}` 
+          }}>
+            <Coins size={24} />
           </div>
-          <span className="kpi-subtext">
-            {metrics.netBalance >= 0 ? 'Positive net receivables' : 'Net liabilities to settle'}
-          </span>
         </div>
 
-      </div>
+      </section>
 
       {/* --- CONTROLS & FILTER ROW --- */}
-      <div className="table-header-controls">
-        
-        {/* Toggle List Tabs */}
-        <div 
-          role="group" 
-          aria-label="Filter List"
-          style={{ 
-            display: 'flex', 
-            gap: '0.25rem', 
-            backgroundColor: 'var(--bg-card-hover)', 
-            padding: '0.25rem', 
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)',
-            alignSelf: 'flex-start'
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab('active')}
-            style={{
-              padding: '0.5rem 1rem',
-              border: 'none',
-              borderRadius: 'calc(var(--radius-md) - 2px)',
-              backgroundColor: activeTab === 'active' ? 'var(--primary)' : 'transparent',
-              color: activeTab === 'active' ? 'white' : 'var(--text-secondary)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              transition: 'all var(--transition-fast)'
-            }}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            style={{
-              padding: '0.5rem 1rem',
-              border: 'none',
-              borderRadius: 'calc(var(--radius-md) - 2px)',
-              backgroundColor: activeTab === 'history' ? 'var(--primary)' : 'transparent',
-              color: activeTab === 'history' ? 'white' : 'var(--text-secondary)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              transition: 'all var(--transition-fast)'
-            }}
-          >
-            Setted / History
-          </button>
-        </div>
-
-        {/* Search & Action Row */}
-        <div style={{ display: 'flex', gap: '0.75rem', width: '100%', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           
-          <div className="search-bar" style={{ flex: 1, minWidth: '220px', maxWidth: '400px' }}>
-            <Search className="search-icon" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by name or description..." 
-              className="search-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          {/* Toggle List Tabs */}
+          <div 
+            role="group" 
+            aria-label="Filter List"
+            style={{ 
+              display: 'flex', 
+              gap: '0.25rem', 
+              backgroundColor: 'var(--bg-card-hover)', 
+              padding: '0.25rem', 
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveTab('active')}
+              style={{
+                padding: '0.5rem 1rem',
+                border: 'none',
+                borderRadius: 'calc(var(--radius-md) - 2px)',
+                backgroundColor: activeTab === 'active' ? 'var(--primary)' : 'transparent',
+                color: activeTab === 'active' ? 'white' : 'var(--text-secondary)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              Active Obligations
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              style={{
+                padding: '0.5rem 1rem',
+                border: 'none',
+                borderRadius: 'calc(var(--radius-md) - 2px)',
+                backgroundColor: activeTab === 'history' ? 'var(--primary)' : 'transparent',
+                color: activeTab === 'history' ? 'white' : 'var(--text-secondary)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              Settled History
+            </button>
           </div>
 
           <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
             <Plus size={18} />
             <span>Add Entry</span>
           </button>
-
         </div>
 
+        <div className="search-input-box" style={{ width: '100%' }}>
+          <Search size={18} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Search by name or description..." 
+            className="search-input"
+            style={{ width: '100%' }}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
       </div>
 
-      {/* --- DEBT CARDS LIST --- */}
-      <div className="transaction-card-list">
+      {/* --- DEBT CARDS RESPONSIVE GRID --- */}
+      <div 
+        style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+          gap: '1rem',
+          width: '100%'
+        }}
+      >
         {filteredDebts.length === 0 ? (
-          <div className="empty-state" style={{ padding: '3rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div className="empty-state" style={{ gridColumn: '1 / -1', padding: '3rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Coins size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
             <p>No {activeTab} debts or loans found matching your query.</p>
           </div>
@@ -262,7 +276,10 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                 className="transaction-card-item"
                 style={{
                   borderLeft: `4px solid ${d.type === 'loan' ? 'var(--success)' : 'var(--warning)'}`,
-                  position: 'relative'
+                  position: 'relative',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  gap: '0.75rem'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -274,15 +291,15 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                       }}>
                         {d.type === 'loan' ? 'Owed to You' : 'You Owe'}
                       </span>
-                      <span className="tx-card-payment">{d.name}</span>
+                      <span className="tx-card-payment" style={{ fontWeight: 600 }}>{d.name}</span>
                       
                       {overdue && (
-                        <span className="pending-badge warning" style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem' }}>
-                          <AlertTriangle size={12} style={{ marginRight: '2px' }} /> Overdue
+                        <span className="pending-badge warning" style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <AlertTriangle size={12} /> Overdue
                         </span>
                       )}
                     </div>
-                    <div className="tx-card-desc" style={{ marginTop: '0.5rem', fontSize: '1rem', fontWeight: 500 }}>
+                    <div className="tx-card-desc" style={{ marginTop: '0.5rem', fontSize: '0.95rem', fontWeight: 500, color: 'var(--text-primary)' }}>
                       {d.description || 'No description provided'}
                     </div>
                   </div>
@@ -291,7 +308,7 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                     <div className={`tx-card-amount ${d.type === 'loan' ? 'text-success' : 'text-warning'}`} style={{ fontSize: '1.25rem', fontWeight: 700 }}>
                       ₹{parseFloat(d.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </div>
-                    <div className="tx-card-date" style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                    <div className="tx-card-date" style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '0.25rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       <Calendar size={12} />
                       <span>{d.date}</span>
                     </div>
@@ -303,12 +320,12 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                   {d.status === 'pending' && (
                     <button 
                       className="btn btn-secondary" 
                       onClick={() => settleDebt(d.id)}
-                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <CheckCircle2 size={14} className="text-success" />
                       <span>Mark Settled</span>
@@ -321,7 +338,7 @@ export default function DebtTracker({ debts = [], addDebt, deleteDebt, settleDeb
                         deleteDebt(d.id)
                       }
                     }}
-                    style={{ padding: '0.3rem', minWidth: '32px', color: 'var(--danger)' }}
+                    style={{ padding: '0.35rem', minWidth: '32px', color: 'var(--danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     aria-label="Delete entry"
                   >
                     <Trash2 size={14} />
