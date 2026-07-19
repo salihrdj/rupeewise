@@ -7,7 +7,8 @@ import {
   AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
-  Scale
+  Scale,
+  Coins
 } from 'lucide-react'
 import { 
   ResponsiveContainer, 
@@ -22,7 +23,7 @@ import {
   Legend
 } from 'recharts'
 
-export default function Dashboard({ transactions = [], categories = [] }) {
+export default function Dashboard({ transactions = [], categories = [], debts = [] }) {
   // Toggle for donut chart breakdown
   const [donutType, setDonutType] = useState('outflow')
 
@@ -320,6 +321,31 @@ export default function Dashboard({ transactions = [], categories = [] }) {
       })
   }, [filteredTransactions, categories, selectedPeriod])
 
+  const debtsSummary = useMemo(() => {
+    let owedToYou = 0
+    let youOwe = 0
+    let activeCount = 0
+
+    debts.forEach(d => {
+      if (d.status === 'pending') {
+        const amt = parseFloat(d.amount) || 0
+        activeCount++
+        if (d.type === 'loan') {
+          owedToYou += amt
+        } else if (d.type === 'debt') {
+          youOwe += amt
+        }
+      }
+    })
+
+    return {
+      owedToYou,
+      youOwe,
+      netBalance: owedToYou - youOwe,
+      count: activeCount
+    }
+  }, [debts])
+
   const incomeCheckpoints = useMemo(() => {
     const categoryEarned = {}
     filteredTransactions.forEach(t => {
@@ -449,7 +475,7 @@ export default function Dashboard({ transactions = [], categories = [] }) {
                 {formatCurrency(monthlyOutflowAverage)}
               </span>
               <span className="metric-subtext">
-                Tracked across {monthsPassed} months
+                Tracked across {selectedPeriod.year} data
               </span>
             </div>
             <div className="metric-icon-box" style={{ color: 'var(--secondary)', borderLeft: '3px solid var(--secondary)' }}>
@@ -457,6 +483,27 @@ export default function Dashboard({ transactions = [], categories = [] }) {
             </div>
           </div>
         )}
+
+        {/* Card 5: Debts & Loans Summary */}
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Debts & Loans</span>
+            <span className="metric-value" style={{ color: debtsSummary.netBalance > 0 ? 'var(--success)' : debtsSummary.netBalance < 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
+              {formatCurrency(debtsSummary.netBalance)}
+            </span>
+            <span className="metric-subtext" style={{ color: debtsSummary.netBalance > 0 ? 'var(--success)' : debtsSummary.netBalance < 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
+              {debtsSummary.count > 0 
+                ? `${debtsSummary.count} pending ${debtsSummary.count === 1 ? 'entry' : 'entries'}`
+                : 'No active obligations'}
+            </span>
+          </div>
+          <div className="metric-icon-box" style={{ 
+            color: debtsSummary.netBalance > 0 ? 'var(--success)' : debtsSummary.netBalance < 0 ? 'var(--warning)' : 'var(--secondary)', 
+            borderLeft: `3px solid ${debtsSummary.netBalance > 0 ? 'var(--success)' : debtsSummary.netBalance < 0 ? 'var(--warning)' : 'var(--secondary)'}` 
+          }}>
+            <Coins size={24} />
+          </div>
+        </div>
 
       </section>
 

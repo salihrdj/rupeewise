@@ -59,3 +59,21 @@ export function validateTransactions(data) {
 export function validateCategories(data) {
   return z.array(CategorySchema).safeParse(data)
 }
+
+export const DebtSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(['debt', 'loan']),
+  amount: posNum(),
+  description: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.string().length(0)).optional().nullable(),
+  status: z.enum(['pending', 'settled']),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  syncPending: z.enum(['add', 'update', 'delete']).optional(),
+})
+
+export function validateDebts(data) {
+  return z.array(DebtSchema).safeParse(data)
+}

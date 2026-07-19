@@ -9,17 +9,20 @@ import {
   WifiOff, 
   Moon, 
   Sun, 
-  AlertCircle 
+  AlertCircle,
+  Coins
 } from 'lucide-react'
 import Dashboard from './components/Dashboard'
 import TransactionTable from './components/TransactionTable'
 import TransactionForm from './components/TransactionForm'
 import Settings from './components/Settings'
 import CategoryManager from './components/CategoryManager'
+import DebtTracker from './components/DebtTracker'
 import ErrorBoundary from './components/ErrorBoundary'
 import confetti from 'canvas-confetti'
 import { useTransactions } from './hooks/useTransactions'
 import { useCategories } from './hooks/useCategories'
+import { useDebts } from './hooks/useDebts'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { useSync } from './hooks/useSync'
 import { fetchWithTimeout } from './utils/fetchWithTimeout'
@@ -77,6 +80,13 @@ function AppInner() {
     isInitialized: catsInitialized,
     updateCategories
   } = useCategories()
+
+  const {
+    debts,
+    addDebt,
+    deleteDebt,
+    settleDebt
+  } = useDebts()
 
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -333,6 +343,12 @@ function AppInner() {
                 <span>Category Budgets</span>
               </button>
             </li>
+            <li className={`nav-item ${activeTab === 'debts' ? 'active' : ''}`}>
+              <button onClick={() => setActiveTab('debts')}>
+                <Coins size={20} />
+                <span>Debts & Loans</span>
+              </button>
+            </li>
             <li className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}>
               <button onClick={() => setActiveTab('settings')}>
                 <SettingsIcon size={20} />
@@ -373,12 +389,14 @@ function AppInner() {
               {activeTab === 'dashboard' && 'Dashboard Overview'}
               {activeTab === 'transactions' && 'Expenditure Journal'}
               {activeTab === 'categories' && 'Budget Guardrails'}
-              {activeTab === 'settings' && 'System Configuration'}
+              {activeTab === 'debts' && 'Debts & Loans'}
+              {activeTab === 'settings' && 'App Configuration'}
             </h1>
-            <p>
-              {activeTab === 'dashboard' && 'Visual analysis and real-time budget metrics.'}
+            <p className="subtitle">
+              {activeTab === 'dashboard' && 'Visual analysis and summary of your financials.'}
               {activeTab === 'transactions' && 'Full registry of all expenditures.'}
               {activeTab === 'categories' && 'Set custom monthly allowances by category.'}
+              {activeTab === 'debts' && 'Track owes, loans, and net debt balances.'}
               {activeTab === 'settings' && 'Configure database storage and sync workflows.'}
             </p>
           </div>
@@ -401,6 +419,7 @@ function AppInner() {
           <Dashboard 
             transactions={transactions} 
             categories={categories} 
+            debts={debts}
           />
         )}
 
@@ -419,6 +438,16 @@ function AppInner() {
             onUpdate={handleUpdateCategories} 
             showAlert={showAlert}
             transactions={transactions}
+          />
+        )}
+
+        {activeTab === 'debts' && (
+          <DebtTracker 
+            debts={debts}
+            addDebt={addDebt}
+            deleteDebt={deleteDebt}
+            settleDebt={settleDebt}
+            showAlert={showAlert}
           />
         )}
 
@@ -456,6 +485,13 @@ function AppInner() {
           aria-label="Navigate to categories budget management"
         >
           <FolderLock size={24} />
+        </button>
+        <button 
+          style={{ background: 'none', border: 'none', color: activeTab === 'debts' ? 'var(--primary)' : 'var(--text-secondary)' }}
+          onClick={() => setActiveTab('debts')}
+          aria-label="Navigate to debts tracker"
+        >
+          <Coins size={24} />
         </button>
         <button 
           style={{ background: 'none', border: 'none', color: activeTab === 'settings' ? 'var(--primary)' : 'var(--text-secondary)' }}
