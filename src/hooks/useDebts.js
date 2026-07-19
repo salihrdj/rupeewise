@@ -147,34 +147,52 @@ export function useDebts(addTransaction, showAlert) {
       nextPaymentDate,
       lastPaymentDate: null,
       status: 'pending',
+      syncPending: 'add',
     }
 
-    const nextDebts = [newDebt, ...debts]
-    setDebts(nextDebts)
-    safeSetItem('spend_debts', JSON.stringify(nextDebts))
+    setDebts(prevDebts => [newDebt, ...prevDebts].filter(d => d && d.syncPending !== 'delete'))
+    
+    const allDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+    const nextAllDebts = [newDebt, ...allDebts]
+    safeSetItem('spend_debts', JSON.stringify(nextAllDebts))
+    
     return newDebt
-  }, [debts])
+  }, [])
 
   const updateDebt = useCallback(async (id, fields) => {
-    const nextDebts = debts.map(d => {
-      if (d.id === id) {
-        return {
-          ...d,
-          ...fields,
-          updatedAt: new Date().toISOString(),
-        }
-      }
-      return d
-    })
-    setDebts(nextDebts)
-    safeSetItem('spend_debts', JSON.stringify(nextDebts))
-  }, [debts])
+    const allDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+    const existingDebt = allDebts.find(d => d.id === id)
+    if (!existingDebt) return
+
+    const updatedDebt = {
+      ...existingDebt,
+      ...fields,
+      updatedAt: new Date().toISOString(),
+      syncPending: 'update',
+    }
+
+    setDebts(prevDebts => prevDebts.map(d => d.id === id ? updatedDebt : d).filter(d => d && d.syncPending !== 'delete'))
+    
+    const nextAllDebts = allDebts.map(d => d.id === id ? updatedDebt : d)
+    safeSetItem('spend_debts', JSON.stringify(nextAllDebts))
+  }, [])
 
   const deleteDebt = useCallback(async (id) => {
-    const nextDebts = debts.filter(d => d.id !== id)
-    setDebts(nextDebts)
-    safeSetItem('spend_debts', JSON.stringify(nextDebts))
-  }, [debts])
+    const allDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+    const debtToDelete = allDebts.find(d => d.id === id)
+    if (!debtToDelete) return
+
+    if (debtToDelete.syncPending === 'add') {
+      setDebts(prevDebts => prevDebts.filter(d => d.id !== id))
+      const nextAllDebts = allDebts.filter(d => d.id !== id)
+      safeSetItem('spend_debts', JSON.stringify(nextAllDebts))
+      return
+    }
+
+    setDebts(prevDebts => prevDebts.filter(d => d.id !== id))
+    const nextAllDebts = allDebts.map(d => d.id === id ? { ...debtToDelete, syncPending: 'delete' } : d)
+    safeSetItem('spend_debts', JSON.stringify(nextAllDebts))
+  }, [])
 
   const settleDebt = useCallback(async (id) => {
     await updateDebt(id, { status: 'settled' })
@@ -182,6 +200,7 @@ export function useDebts(addTransaction, showAlert) {
 
   return {
     debts,
+    setDebts,
     isInitialized,
     addDebt,
     updateDebt,

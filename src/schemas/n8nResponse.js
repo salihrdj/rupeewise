@@ -36,6 +36,7 @@ export const SyncErrorsSchema = z.object({
 export const N8nFetchResponseSchema = z.object({
   transactions: z.array(TransactionSchema).optional(),
   categories: z.array(CategorySchema).optional(),
+  debts: z.array(DebtSchema).optional(),
   syncErrors: SyncErrorsSchema.optional(),
 })
 

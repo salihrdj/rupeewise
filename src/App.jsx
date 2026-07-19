@@ -52,6 +52,12 @@ function AppInner() {
   const [editingTransaction, setEditingTransaction] = useState(null)
   const [alert, setAlert] = useState(null)
 
+  // Helper alert notifier
+  const showAlert = useCallback((message, type = 'success') => {
+    setAlert({ message, type })
+    setTimeout(() => setAlert(null), 5000)
+  }, [])
+
   // 1. Settings Context
   const { 
     isN8nMode, 
@@ -83,18 +89,13 @@ function AppInner() {
 
   const {
     debts,
+    setDebts,
     addDebt,
     deleteDebt,
     settleDebt
   } = useDebts(addTransaction, showAlert)
 
   const [isSyncing, setIsSyncing] = useState(false)
-
-  // Helper alert notifier
-  const showAlert = useCallback((message, type = 'success') => {
-    setAlert({ message, type })
-    setTimeout(() => setAlert(null), 5000)
-  }, [])
 
   // 3. n8n Synchronization Hook
   const {
@@ -106,8 +107,10 @@ function AppInner() {
     n8nToken,
     transactions,
     categories,
+    debts,
     setTransactions,
     setCategories,
+    setDebts,
     showAlert,
     isSyncing,
     setIsSyncing

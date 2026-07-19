@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchWithTimeout } from '../utils/fetchWithTimeout'
 import { acquireLock, releaseLock } from '../utils/syncLock'
 import { safeGetItem, safeSetItem } from '../utils/storage'
-import { validateN8nFetchResponse } from '../schemas/n8nResponse'
+import { validateN8nFetchResponse, validateN8nMutationResponse } from '../schemas/n8nResponse'
 import { DEFAULT_CATEGORIES } from '../App'
 
 export function useSync({
@@ -11,8 +11,10 @@ export function useSync({
   n8nToken,
   transactions,
   categories,
+  debts,
   setTransactions,
   setCategories,
+  setDebts,
   showAlert,
   isSyncing,
   setIsSyncing,
@@ -21,7 +23,7 @@ export function useSync({
   const offlineCheckCounterRef = useRef(0)
   const isSyncingRef = useRef(false)
 
-  const saveMutationToN8n = useCallback(async (action, transactionData, silentAlert = false, skipLock = false) => {
+  const saveMutationToN8n = useCallback(async (type, action, data, silentAlert = false, skipLock = false) => {
     if (!isN8nMode || !n8nUrl) return true
     
     if (!skipLock) {
@@ -37,10 +39,10 @@ export function useSync({
           'X-API-KEY': n8nToken
         },
         body: JSON.stringify({
-          action,
-          data: transactionData
+          action: `${action}_${type}`, // e.g. 'add_transaction', 'add_debt'
+          data
         })
-      }, 90000)
+      }, 15000)
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -48,12 +50,18 @@ export function useSync({
         }
         throw new Error(`Failed to commit change. Server code: ${response.status}`)
       }
+
+      const resData = await response.json()
+      const validation = validateN8nMutationResponse(resData)
+      if (!validation.success || (validation.data.success === false)) {
+        throw new Error(validation.data?.error || 'n8n execution failed')
+      }
       return true
     } catch (err) {
       console.error(err)
       if (err.name === 'AbortError') {
         if (!silentAlert) {
-          showAlert('n8n mutation request timed out. Kept locally as pending sync.', 'warning')
+          showAlert(`n8n ${type} mutation timed out. Kept locally as pending sync.`, 'warning')
         }
       } else {
         if (!silentAlert) {
@@ -69,57 +77,86 @@ export function useSync({
   }, [isN8nMode, n8nUrl, n8nToken, showAlert])
 
   const syncPendingMutations = useCallback(async () => {
+    // 1. Sync Transactions
     const localTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
     const pendingTxs = localTxs.filter(t => t && t.syncPending)
-    if (pendingTxs.length === 0) return true
+
+    // 2. Sync Debts
+    const localDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+    const pendingDebts = localDebts.filter(d => d && d.syncPending)
 
     let allSuccess = true
-    const nextLocalTxs = [...localTxs]
-    let updatedAny = false
 
-    for (const tx of pendingTxs) {
-      try {
-        let success = false
-        const cleanTx = { ...tx }
-        delete cleanTx.syncPending
-
-        if (tx.syncPending === 'add') {
-          success = await saveMutationToN8n('add', cleanTx, true, true)
-        } else if (tx.syncPending === 'update') {
-          success = await saveMutationToN8n('update', cleanTx, true, true)
-        } else if (tx.syncPending === 'delete') {
-          success = await saveMutationToN8n('delete', cleanTx, true, true)
-        }
-
-        if (success) {
-          updatedAny = true
-          if (tx.syncPending === 'delete') {
-            const index = nextLocalTxs.findIndex(t => t.id === tx.id)
-            if (index !== -1) nextLocalTxs.splice(index, 1)
-          } else {
-            const index = nextLocalTxs.findIndex(t => t.id === tx.id)
-            if (index !== -1) {
-              nextLocalTxs[index] = cleanTx
+    // Process transactions
+    if (pendingTxs.length > 0) {
+      const nextLocalTxs = [...localTxs]
+      let updatedAny = false
+      for (const tx of pendingTxs) {
+        try {
+          const cleanTx = { ...tx }
+          delete cleanTx.syncPending
+          const success = await saveMutationToN8n('transaction', tx.syncPending, cleanTx, true, true)
+          if (success) {
+            updatedAny = true
+            if (tx.syncPending === 'delete') {
+              const index = nextLocalTxs.findIndex(t => t.id === tx.id)
+              if (index !== -1) nextLocalTxs.splice(index, 1)
+            } else {
+              const index = nextLocalTxs.findIndex(t => t.id === tx.id)
+              if (index !== -1) nextLocalTxs[index] = cleanTx
             }
+          } else {
+            allSuccess = false
+            break
           }
-        } else {
+        } catch (err) {
+          console.error(err)
           allSuccess = false
           break
         }
-      } catch (err) {
-        console.error('Failed to sync pending transaction:', err)
-        allSuccess = false
-        break
+      }
+      if (updatedAny) {
+        safeSetItem('spend_transactions', JSON.stringify(nextLocalTxs))
+        setTransactions(nextLocalTxs.filter(t => t && t.syncPending !== 'delete'))
       }
     }
 
-    if (updatedAny) {
-      safeSetItem('spend_transactions', JSON.stringify(nextLocalTxs))
-      setTransactions(nextLocalTxs.filter(t => t && t.syncPending !== 'delete'))
+    // Process debts
+    if (allSuccess && pendingDebts.length > 0) {
+      const nextLocalDebts = [...localDebts]
+      let updatedAny = false
+      for (const d of pendingDebts) {
+        try {
+          const cleanDebt = { ...d }
+          delete cleanDebt.syncPending
+          const success = await saveMutationToN8n('debt', d.syncPending, cleanDebt, true, true)
+          if (success) {
+            updatedAny = true
+            if (d.syncPending === 'delete') {
+              const index = nextLocalDebts.findIndex(x => x.id === d.id)
+              if (index !== -1) nextLocalDebts.splice(index, 1)
+            } else {
+              const index = nextLocalDebts.findIndex(x => x.id === d.id)
+              if (index !== -1) nextLocalDebts[index] = cleanDebt
+            }
+          } else {
+            allSuccess = false
+            break
+          }
+        } catch (err) {
+          console.error(err)
+          allSuccess = false
+          break
+        }
+      }
+      if (updatedAny) {
+        safeSetItem('spend_debts', JSON.stringify(nextLocalDebts))
+        setDebts(nextLocalDebts.filter(x => x && x.syncPending !== 'delete'))
+      }
     }
 
     return allSuccess
-  }, [setTransactions, saveMutationToN8n])
+  }, [setTransactions, setDebts, saveMutationToN8n])
 
   const fetchFromN8n = useCallback(async (silent = false) => {
     if (!n8nUrl) return
@@ -177,13 +214,15 @@ export function useSync({
       
       const validatedData = validationResult.data
       
-      if (validatedData.syncErrors && (validatedData.syncErrors.transactions || validatedData.syncErrors.categories)) {
+      if (validatedData.syncErrors && (validatedData.syncErrors.transactions || validatedData.syncErrors.categories || validatedData.syncErrors.debts)) {
         const failedSheets = []
         if (validatedData.syncErrors.transactions) failedSheets.push('Transactions')
         if (validatedData.syncErrors.categories) failedSheets.push('Categories')
+        if (validatedData.syncErrors.debts) failedSheets.push('Debts')
         throw new Error(`Connected to n8n, but Google Sheet read failed for: ${failedSheets.join(', ')}. Check sheet name, column headers, and credentials in n8n.`)
       }
       
+      // Merge Transactions
       if (validatedData.transactions) {
         const localTxs = JSON.parse(safeGetItem('spend_transactions') || '[]')
         const remoteTxs = validatedData.transactions
@@ -219,8 +258,6 @@ export function useSync({
 
         for (const localTx of localTxs) {
           if (!remoteTxs.find(t => t.id === localTx.id)) {
-            // Self-healing: if a transaction is local but missing from the spreadsheet,
-            // and has no pending sync flag, mark it as pending 'add' so it gets uploaded.
             if (!localTx.syncPending) {
               localTx.syncPending = 'add';
             }
@@ -239,6 +276,8 @@ export function useSync({
           showAlert(`Sync conflict resolved for ${conflicts.length} transaction(s). Local changes preserved.`, 'warning')
         }
       }
+
+      // Merge Categories
       if (validatedData.categories) {
         if (validatedData.categories.length > 0) {
           const nextCatsStr = JSON.stringify(validatedData.categories)
@@ -255,6 +294,44 @@ export function useSync({
           }
         }
       }
+
+      // Merge Debts
+      if (validatedData.debts) {
+        const localDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+        const remoteDebts = validatedData.debts
+        const mergedDebts = []
+
+        for (const remoteDebt of remoteDebts) {
+          const localDebt = localDebts.find(d => d.id === remoteDebt.id)
+          
+          if (!localDebt) {
+            mergedDebts.push(remoteDebt)
+          } else if (localDebt.syncPending) {
+            mergedDebts.push(localDebt)
+          } else {
+            const remoteUpdated = new Date(remoteDebt.updatedAt || 0).getTime()
+            const localUpdated = new Date(localDebt.updatedAt || 0).getTime()
+            mergedDebts.push(remoteUpdated > localUpdated ? remoteDebt : localDebt)
+          }
+        }
+
+        for (const localDebt of localDebts) {
+          if (!remoteDebts.find(d => d.id === localDebt.id)) {
+            if (!localDebt.syncPending) {
+              localDebt.syncPending = 'add';
+            }
+            mergedDebts.push(localDebt)
+          }
+        }
+
+        const nextDebtsStr = JSON.stringify(mergedDebts)
+        const currentDebtsStr = safeGetItem('spend_debts')
+        if (nextDebtsStr !== currentDebtsStr) {
+          setDebts(mergedDebts)
+          safeSetItem('spend_debts', nextDebtsStr)
+        }
+      }
+
       if (!silent) {
         showAlert('Database successfully synchronized with Sheet database!')
       }
@@ -276,7 +353,7 @@ export function useSync({
       if (!silent) setIsSyncing(false)
       await releaseLock()
     }
-  }, [n8nUrl, n8nToken, syncPendingMutations, setTransactions, setCategories, showAlert, setIsSyncing])
+  }, [n8nUrl, n8nToken, syncPendingMutations, setTransactions, setCategories, setDebts, showAlert, setIsSyncing])
 
   return {
     fetchFromN8n,
