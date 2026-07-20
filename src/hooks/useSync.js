@@ -30,6 +30,12 @@ export function useSync({
       const lockAcquired = await acquireLock()
       if (!lockAcquired) return false
     }
+
+    // Construct action string compatible with n8n workflow router
+    let actionString = action
+    if (type === 'debt' && !action.includes('debt')) {
+      actionString = `${action}_debt`
+    }
     
     try {
       const response = await fetchWithTimeout(n8nUrl, {
@@ -39,7 +45,8 @@ export function useSync({
           'X-API-KEY': n8nToken
         },
         body: JSON.stringify({
-          action: `${action}_${type}`, // e.g. 'add_transaction', 'add_debt'
+          action: actionString,
+          type,
           data
         })
       }, 15000)
