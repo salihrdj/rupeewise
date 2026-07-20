@@ -792,6 +792,8 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--transition-normal);
+  overflow-y: auto;
+  padding: 1.5rem;
 }
 
 .modal-overlay.active {
@@ -806,6 +808,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 2rem;
   width: 100%;
   max-width: 500px;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   transform: translateY(20px);
   transition: transform var(--transition-normal);

@@ -91,6 +91,7 @@ function AppInner() {
     debts,
     setDebts,
     addDebt,
+    updateDebt,
     deleteDebt,
     settleDebt
   } = useDebts(addTransaction, showAlert)
@@ -304,6 +305,35 @@ function AppInner() {
     }
   }
 
+  const handleAddDebt = async (debtData) => {
+    const res = await addDebt(debtData)
+    if (isN8nMode && n8nUrl && !n8nOfflineRef.current) {
+      fetchFromN8n(true)
+    }
+    return res
+  }
+
+  const handleUpdateDebt = async (id, fields) => {
+    await updateDebt(id, fields)
+    if (isN8nMode && n8nUrl && !n8nOfflineRef.current) {
+      fetchFromN8n(true)
+    }
+  }
+
+  const handleDeleteDebt = async (id) => {
+    await deleteDebt(id)
+    if (isN8nMode && n8nUrl && !n8nOfflineRef.current) {
+      fetchFromN8n(true)
+    }
+  }
+
+  const handleSettleDebt = async (id) => {
+    await settleDebt(id)
+    if (isN8nMode && n8nUrl && !n8nOfflineRef.current) {
+      fetchFromN8n(true)
+    }
+  }
+
   const openEditModal = (transaction) => {
     setEditingTransaction(transaction)
     setIsAddModalOpen(true)
@@ -447,10 +477,10 @@ function AppInner() {
         {activeTab === 'debts' && (
           <DebtTracker 
             debts={debts}
-            addDebt={addDebt}
-            updateDebt={updateDebt}
-            deleteDebt={deleteDebt}
-            settleDebt={settleDebt}
+            addDebt={handleAddDebt}
+            updateDebt={handleUpdateDebt}
+            deleteDebt={handleDeleteDebt}
+            settleDebt={handleSettleDebt}
             showAlert={showAlert}
             categories={categories}
           />
