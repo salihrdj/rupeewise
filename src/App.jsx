@@ -93,7 +93,8 @@ function AppInner() {
     addDebt,
     updateDebt,
     deleteDebt,
-    settleDebt
+    settleDebt,
+    payMonthlyEmi
   } = useDebts(addTransaction, showAlert)
 
   const [isSyncing, setIsSyncing] = useState(false)
@@ -334,6 +335,13 @@ function AppInner() {
     }
   }
 
+  const handlePayMonthlyEmi = async (id) => {
+    await payMonthlyEmi(id)
+    if (isN8nMode && n8nUrl && !n8nOfflineRef.current) {
+      fetchFromN8n(true)
+    }
+  }
+
   const openEditModal = (transaction) => {
     setEditingTransaction(transaction)
     setIsAddModalOpen(true)
@@ -481,6 +489,9 @@ function AppInner() {
             updateDebt={handleUpdateDebt}
             deleteDebt={handleDeleteDebt}
             settleDebt={handleSettleDebt}
+            payMonthlyEmi={handlePayMonthlyEmi}
+            onSync={() => fetchFromN8n(false)}
+            isSyncing={isSyncing}
             showAlert={showAlert}
             categories={categories}
           />

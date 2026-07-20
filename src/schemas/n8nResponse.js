@@ -49,6 +49,15 @@ export const DebtSchema = z.object({
   syncPending: z.enum(['add', 'update', 'delete']).optional().nullable(),
   
   // EMI Scheduling Attributes
+  isEmi: z.boolean().optional().nullable(),
+  totalMonths: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().int().nonnegative().optional().nullable()
+  ),
+  monthsRemaining: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().int().nonnegative().optional().nullable()
+  ),
   originalAmount: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
     z.number().nonnegative().optional().nullable()

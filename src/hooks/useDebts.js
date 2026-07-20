@@ -203,6 +203,50 @@ export function useDebts(addTransaction, showAlert) {
     await updateDebt(id, { status: 'settled' })
   }, [updateDebt])
 
+  const payMonthlyEmi = useCallback(async (id) => {
+    const allDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+    const d = allDebts.find(item => item.id === id)
+    if (!d || !d.emiAmount) return
+
+    const currentDebtAmount = parseFloat(d.amount) || 0
+    const emiVal = parseFloat(d.emiAmount) || 0
+    const paidAmt = Math.min(currentDebtAmount, emiVal)
+    const nextAmount = Math.max(0, currentDebtAmount - paidAmt)
+
+    const totalMonths = parseInt(d.totalMonths, 10) || 0
+    const currentMonthsRemaining = parseInt(d.monthsRemaining, 10) || (emiVal > 0 ? Math.ceil(currentDebtAmount / emiVal) : 0)
+    const nextMonthsRemaining = Math.max(0, currentMonthsRemaining - 1)
+
+    const payDate = d.nextPaymentDate || new Date().toISOString().split('T')[0]
+    const nextDateStr = advanceOneMonth(payDate, d.emiDay || 5)
+
+    if (addTransaction) {
+      await addTransaction({
+        date: payDate,
+        category: d.emiCategory || 'Others',
+        amount: paidAmt,
+        type: d.type === 'loan' ? 'inflow' : 'outflow',
+        description: `EMI Payment ${totalMonths ? `(${totalMonths - nextMonthsRemaining}/${totalMonths}) ` : ''}— ${d.name}`
+      })
+    }
+
+    const updatedFields = {
+      amount: nextAmount,
+      monthsRemaining: nextMonthsRemaining,
+      nextPaymentDate: nextDateStr,
+      lastPaymentDate: payDate,
+      status: (nextAmount <= 0 || nextMonthsRemaining <= 0) ? 'settled' : 'pending',
+      updatedAt: new Date().toISOString(),
+      syncPending: 'update'
+    }
+
+    await updateDebt(id, updatedFields)
+
+    if (showAlert) {
+      showAlert(`Paid EMI instalment of ₹${paidAmt.toLocaleString('en-IN')} for ${d.name}!`, 'success')
+    }
+  }, [addTransaction, updateDebt, showAlert])
+
   return {
     debts,
     setDebts,
@@ -210,6 +254,7 @@ export function useDebts(addTransaction, showAlert) {
     addDebt,
     updateDebt,
     deleteDebt,
-    settleDebt
+    settleDebt,
+    payMonthlyEmi
   }
 }
