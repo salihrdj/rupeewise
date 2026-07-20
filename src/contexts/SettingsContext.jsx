@@ -14,7 +14,7 @@ export function SettingsProvider({ children }) {
     const initSettings = async () => {
       const savedN8nMode = safeGetItem('spend_n8n_mode') === 'true'
       const savedN8nUrl = safeGetItem('spend_n8n_url') || ''
-      const savedN8nTokenEncrypted = sessionStorage.getItem('spend_n8n_token_enc') || ''
+      const savedN8nTokenEncrypted = localStorage.getItem('spend_n8n_token_enc') || sessionStorage.getItem('spend_n8n_token_enc') || ''
       const savedTheme = safeGetItem('spend_theme') || 'dark'
 
       let decryptedToken = await decryptToken(savedN8nTokenEncrypted)
@@ -24,9 +24,12 @@ export function SettingsProvider({ children }) {
         if (legacyToken) {
           decryptedToken = legacyToken
           const encrypted = await encryptToken(legacyToken)
-          sessionStorage.setItem('spend_n8n_token_enc', encrypted)
+          localStorage.setItem('spend_n8n_token_enc', encrypted)
           safeRemoveItem('spend_n8n_token')
         }
+      } else {
+        const encrypted = await encryptToken(decryptedToken)
+        localStorage.setItem('spend_n8n_token_enc', encrypted)
       }
       
       setIsN8nMode(savedN8nMode)
@@ -51,7 +54,7 @@ export function SettingsProvider({ children }) {
   const updateN8nToken = useCallback(async (token) => {
     setN8nToken(token)
     const encrypted = await encryptToken(token)
-    sessionStorage.setItem('spend_n8n_token_enc', encrypted)
+    localStorage.setItem('spend_n8n_token_enc', encrypted)
     safeRemoveItem('spend_n8n_token')
   }, [])
 

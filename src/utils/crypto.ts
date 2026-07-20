@@ -4,7 +4,7 @@ const IV_LENGTH = 12;
 const KEY_STORAGE_KEY = 'spend_enc_key';
 
 async function getOrCreateKey(): Promise<CryptoKey> {
-  const stored = sessionStorage.getItem(KEY_STORAGE_KEY);
+  const stored = localStorage.getItem(KEY_STORAGE_KEY) || sessionStorage.getItem(KEY_STORAGE_KEY);
   if (stored) {
     try {
       return await crypto.subtle.importKey(
@@ -15,13 +15,13 @@ async function getOrCreateKey(): Promise<CryptoKey> {
         ['encrypt', 'decrypt']
       );
     } catch {
-      // Key corrupted, generate new one
+      localStorage.removeItem(KEY_STORAGE_KEY);
       sessionStorage.removeItem(KEY_STORAGE_KEY);
     }
   }
   const key = await crypto.subtle.generateKey(ALGO, true, ['encrypt', 'decrypt']);
   const exported = await crypto.subtle.exportKey('raw', key);
-  sessionStorage.setItem(KEY_STORAGE_KEY, JSON.stringify(Array.from(new Uint8Array(exported))));
+  localStorage.setItem(KEY_STORAGE_KEY, JSON.stringify(Array.from(new Uint8Array(exported))));
   return key;
 }
 
