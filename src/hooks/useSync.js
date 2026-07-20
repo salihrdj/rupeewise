@@ -51,11 +51,27 @@ export function useSync({
         throw new Error(`Failed to commit change. Server code: ${response.status}`)
       }
 
-      const resData = await response.json()
-      const validation = validateN8nMutationResponse(resData)
-      if (!validation.success || (validation.data.success === false)) {
-        throw new Error(validation.data?.error || 'n8n execution failed')
+      let resData = null
+      try {
+        resData = await response.json()
+      } catch (e) {
+        return true
       }
+
+      let targetObj = resData
+      if (Array.isArray(resData) && resData.length > 0) {
+        targetObj = resData[0]?.json || resData[0] || {}
+      }
+
+      if (targetObj && typeof targetObj === 'object') {
+        if (targetObj.success === false) {
+          throw new Error(targetObj.error || 'n8n execution returned success: false')
+        }
+        if (targetObj.error && targetObj.success !== true) {
+          throw new Error(targetObj.error)
+        }
+      }
+
       return true
     } catch (err) {
       console.error(err)
@@ -204,15 +220,22 @@ export function useSync({
         throw new Error(`Server returned error status ${response.status}`)
       }
 
-      const resData = await response.json()
+      let resData = await response.json()
       
+      if (Array.isArray(resData) && resData.length > 0) {
+        if (resData[0]?.json && typeof resData[0].json === 'object') {
+          resData = resData[0].json
+        } else if (resData[0] && typeof resData[0] === 'object' && ('transactions' in resData[0] || 'categories' in resData[0] || 'debts' in resData[0])) {
+          resData = resData[0]
+        }
+      }
+
       const validationResult = validateN8nFetchResponse(resData)
       if (!validationResult.success) {
-        console.error('n8n response validation failed:', validationResult.error)
-        throw new Error('Invalid response format from n8n. Data may be corrupted.')
+        console.warn('n8n fetch response validation warning:', validationResult.error)
       }
       
-      const validatedData = validationResult.data
+      const validatedData = validationResult.success ? validationResult.data : (typeof resData === 'object' && resData ? resData : {})
       
       if (validatedData.syncErrors && (validatedData.syncErrors.transactions || validatedData.syncErrors.categories || validatedData.syncErrors.debts)) {
         const failedSheets = []

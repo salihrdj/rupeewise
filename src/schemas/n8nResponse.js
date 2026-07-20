@@ -76,29 +76,33 @@ export const DebtSchema = z.object({
 })
 
 export const SyncErrorsSchema = z.object({
-  transactions: z.boolean().optional(),
-  categories: z.boolean().optional(),
-  debts: z.boolean().optional(),
-})
+  transactions: z.boolean().optional().nullable(),
+  categories: z.boolean().optional().nullable(),
+  debts: z.boolean().optional().nullable(),
+}).passthrough()
 
 export const N8nFetchResponseSchema = z.object({
-  transactions: z.array(TransactionSchema).optional(),
-  categories: z.array(CategorySchema).optional(),
-  debts: z.array(DebtSchema).optional(),
-  syncErrors: SyncErrorsSchema.optional(),
-})
+  transactions: z.array(TransactionSchema).optional().nullable(),
+  categories: z.array(CategorySchema).optional().nullable(),
+  debts: z.array(DebtSchema).optional().nullable(),
+  syncErrors: SyncErrorsSchema.optional().nullable(),
+}).passthrough()
 
 export const N8nMutationResponseSchema = z.object({
-  success: z.boolean().optional(),
-  error: z.string().optional(),
-})
+  success: z.boolean().optional().nullable(),
+  error: z.string().optional().nullable(),
+}).passthrough()
 
 export function validateN8nFetchResponse(data) {
   return N8nFetchResponseSchema.safeParse(data)
 }
 
 export function validateN8nMutationResponse(data) {
-  return N8nMutationResponseSchema.safeParse(data)
+  let target = data
+  if (Array.isArray(data) && data.length > 0) {
+    target = data[0]?.json || data[0] || {}
+  }
+  return N8nMutationResponseSchema.safeParse(target)
 }
 
 export function validateTransactions(data) {
