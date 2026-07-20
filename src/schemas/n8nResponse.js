@@ -5,27 +5,34 @@ const posNum = () => z.coerce.number().positive()
 const nonNegNum = () => z.coerce.number().nonnegative()
 const intNonNeg = () => z.coerce.number().int().nonnegative()
 
+const optionalNullableString = () => z.string().optional().nullable()
+
+const emiDaySchema = () => z.preprocess(
+  (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+  z.number().int().min(1).max(31).optional().nullable()
+)
+
 export const TransactionSchema = z.object({
   id: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().min(1),
   category: z.string().min(1),
   amount: posNum(),
-  type: z.enum(['inflow', 'outflow']).optional(),
-  description: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  status: z.enum(['Cleared', 'Pending']).optional(),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-  sourceDevice: z.string().optional(),
-  syncPending: z.enum(['add', 'update', 'delete']).optional(),
-  version: intNonNeg().optional(),
+  type: z.enum(['inflow', 'outflow']).optional().nullable(),
+  description: optionalNullableString(),
+  paymentMethod: optionalNullableString(),
+  status: z.enum(['Cleared', 'Pending']).optional().nullable(),
+  createdAt: optionalNullableString(),
+  updatedAt: optionalNullableString(),
+  sourceDevice: optionalNullableString(),
+  syncPending: z.enum(['add', 'update', 'delete']).optional().nullable(),
+  version: intNonNeg().optional().nullable(),
 })
 
 export const CategorySchema = z.object({
   name: z.string().min(1),
   budget: nonNegNum(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  type: z.enum(['inflow', 'outflow']).optional(),
+  color: z.string().optional().nullable(),
+  type: z.enum(['inflow', 'outflow']).optional().nullable(),
 })
 
 export const DebtSchema = z.object({
@@ -33,21 +40,27 @@ export const DebtSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['debt', 'loan']),
   amount: nonNegNum(),
-  description: z.string().optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.string().length(0)).optional().nullable(),
+  description: optionalNullableString(),
+  date: z.string().min(1),
+  dueDate: optionalNullableString(),
   status: z.enum(['pending', 'settled']),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-  syncPending: z.enum(['add', 'update', 'delete']).optional(),
+  createdAt: optionalNullableString(),
+  updatedAt: optionalNullableString(),
+  syncPending: z.enum(['add', 'update', 'delete']).optional().nullable(),
   
   // EMI Scheduling Attributes
-  originalAmount: nonNegNum().optional(),
-  emiAmount: nonNegNum().optional().nullable(),
-  emiCategory: z.string().optional().nullable(),
-  emiDay: z.coerce.number().int().min(1).max(31).optional().nullable(),
-  nextPaymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.string().length(0)).optional().nullable(),
-  lastPaymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.string().length(0)).optional().nullable(),
+  originalAmount: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().nonnegative().optional().nullable()
+  ),
+  emiAmount: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? null : Number(val)),
+    z.number().nonnegative().optional().nullable()
+  ),
+  emiCategory: optionalNullableString(),
+  emiDay: emiDaySchema(),
+  nextPaymentDate: optionalNullableString(),
+  lastPaymentDate: optionalNullableString(),
 })
 
 export const SyncErrorsSchema = z.object({

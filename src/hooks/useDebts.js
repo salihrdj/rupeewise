@@ -48,12 +48,14 @@ export function useDebts(addTransaction, showAlert) {
           if (validation.success) {
             loadedDebts = validation.data.filter(d => d && d.syncPending !== 'delete')
           } else {
-            console.error('Debts validation failed:', validation.error)
-            safeSetItem('spend_debts', JSON.stringify([]))
+            console.error('Debts validation warning:', validation.error)
+            loadedDebts = Array.isArray(parsed) 
+              ? parsed.filter(d => d && typeof d.id === 'string' && typeof d.name === 'string' && d.syncPending !== 'delete') 
+              : []
           }
         } catch (e) {
           console.error('Failed to parse debts:', e)
-          safeSetItem('spend_debts', JSON.stringify([]))
+          loadedDebts = []
         }
       }
 
@@ -66,15 +68,18 @@ export function useDebts(addTransaction, showAlert) {
         
         for (let i = 0; i < updatedDebts.length; i++) {
           const d = updatedDebts[i]
-          if (d.status === 'pending' && d.emiAmount && d.nextPaymentDate) {
+          if (d && d.status === 'pending' && d.emiAmount && d.nextPaymentDate && d.emiDay) {
             let currentDebtAmount = parseFloat(d.amount) || 0
             let currentNextPaymentDateStr = d.nextPaymentDate
             let nextPaymentDate = new Date(currentNextPaymentDateStr)
             let lastPaymentDate = d.lastPaymentDate || ''
             let iterations = 0
             
+            if (isNaN(nextPaymentDate.getTime())) continue
+
             while (today >= nextPaymentDate && currentDebtAmount > 0 && iterations < 360) {
               const emiVal = parseFloat(d.emiAmount)
+              if (isNaN(emiVal) || emiVal <= 0) break
               const paidAmt = Math.min(currentDebtAmount, emiVal)
               
               // Auto-log transaction in Expenditures Journal

@@ -39,8 +39,31 @@ describe('validateDebts', () => {
       }
     ]
     const res = validateDebts(data)
+    expect(res.success).toBe(true)
+  })
+
+  test('should validate a debt record with null emiDay, null description, null originalAmount', () => {
+    const data = [
+      {
+        id: 'debt-3',
+        name: 'Charlie',
+        type: 'debt',
+        amount: '1000',
+        description: null,
+        date: '2026-07-20',
+        dueDate: null,
+        status: 'pending',
+        originalAmount: null,
+        emiAmount: null,
+        emiCategory: null,
+        emiDay: null,
+        nextPaymentDate: null,
+        lastPaymentDate: null
+      }
+    ]
+    const res = validateDebts(data)
     if (!res.success) {
-      console.error(res.error)
+      console.error('Validation Error for Charlie:', JSON.stringify(res.error, null, 2))
     }
     expect(res.success).toBe(true)
   })

@@ -28,15 +28,17 @@ export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDeb
   const [configEmiCategory, setConfigEmiCategory] = useState('')
 
   const openConfigureEmiModal = (debt) => {
+    if (!debt) return
     setSelectedDebtForEmi(debt)
     setConfigEmiAmount(debt.emiAmount ? String(debt.emiAmount) : '')
     setConfigEmiDay(debt.emiDay ? String(debt.emiDay) : '5')
-    setConfigEmiCategory(debt.emiCategory || (outflowCategories.length > 0 ? outflowCategories[0].name : 'Others'))
+    const defaultCat = (categories && categories.length > 0) ? categories[0].name : 'Others'
+    setConfigEmiCategory(debt.emiCategory || defaultCat)
     setIsEmiModalOpen(true)
   }
 
   const calculateFirstPaymentDate = (startDateStr, emiDayVal) => {
-    const d = new Date(startDateStr)
+    const d = new Date(startDateStr || new Date())
     const year = d.getFullYear()
     const month = d.getMonth()
     const sameMonthDate = new Date(year, month, emiDayVal)
@@ -95,7 +97,7 @@ export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDeb
 
   // Filter categories to outflow only
   const outflowCategories = useMemo(() => {
-    return categories.filter(c => (c.type || 'outflow') === 'outflow')
+    return (categories || []).filter(c => c && (c.type || 'outflow') === 'outflow')
   }, [categories])
 
   // Prefill default category for EMI outflow
@@ -116,8 +118,8 @@ export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDeb
     let owedToYou = 0 // People owes you (type = loan, status = pending)
     let youOwe = 0   // You owe people (type = debt, status = pending)
 
-    debts.forEach(d => {
-      if (d.status === 'pending') {
+    ;(debts || []).forEach(d => {
+      if (d && (d.status || 'pending') === 'pending') {
         const amt = parseFloat(d.amount) || 0
         if (d.type === 'loan') {
           owedToYou += amt
@@ -136,14 +138,17 @@ export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDeb
 
   // Filter and search debts
   const filteredDebts = useMemo(() => {
-    return debts
+    return (debts || [])
       .filter(d => {
-        const matchesTab = activeTab === 'active' ? d.status === 'pending' : d.status === 'settled'
-        const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                             (d.description && d.description.toLowerCase().includes(searchQuery.toLowerCase()))
+        if (!d) return false
+        const matchesTab = activeTab === 'active' ? (d.status || 'pending') === 'pending' : d.status === 'settled'
+        const nameStr = d.name ? String(d.name) : ''
+        const descStr = d.description ? String(d.description) : ''
+        const query = (searchQuery || '').toLowerCase()
+        const matchesSearch = nameStr.toLowerCase().includes(query) || descStr.toLowerCase().includes(query)
         return matchesTab && matchesSearch
       })
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
   }, [debts, activeTab, searchQuery])
 
   // Submit debt/loan handler
