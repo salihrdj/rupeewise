@@ -25,12 +25,12 @@ function acquireLock() {
   
   return new Promise((resolve) => {
     const tryAcquire = () => {
-      const existingLock = sessionStorage.getItem(LOCK_KEY);
+      const existingLock = localStorage.getItem(LOCK_KEY);
       const lockTime = existingLock ? parseInt(existingLock, 10) : 0;
       const now = Date.now();
       
       if (!existingLock || (now - lockTime) > LOCK_TIMEOUT) {
-        sessionStorage.setItem(LOCK_KEY, now.toString());
+        localStorage.setItem(LOCK_KEY, now.toString());
         isLockHeld = true;
         
         if (channel) {
@@ -51,7 +51,7 @@ function releaseLock() {
   if (typeof window === 'undefined') return Promise.resolve();
   
   const channel = getBroadcastChannel();
-  sessionStorage.removeItem(LOCK_KEY);
+  localStorage.removeItem(LOCK_KEY);
   isLockHeld = false;
   
   if (channel) {

@@ -112,6 +112,7 @@ export function useDebts(addTransaction, showAlert) {
                 nextPaymentDate: currentNextPaymentDateStr,
                 lastPaymentDate,
                 status: currentDebtAmount <= 0 ? 'settled' : 'pending',
+                syncPending: 'update',
                 updatedAt: new Date().toISOString()
               }
             }
