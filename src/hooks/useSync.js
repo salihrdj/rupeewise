@@ -281,9 +281,6 @@ export function useSync({
 
         for (const localTx of localTxs) {
           if (!remoteTxs.find(t => t.id === localTx.id)) {
-            if (!localTx.syncPending) {
-              localTx.syncPending = 'add';
-            }
             mergedTxs.push(localTx)
           }
         }
@@ -340,9 +337,6 @@ export function useSync({
 
         for (const localDebt of localDebts) {
           if (!remoteDebts.find(d => d.id === localDebt.id)) {
-            if (!localDebt.syncPending) {
-              localDebt.syncPending = 'add';
-            }
             mergedDebts.push(localDebt)
           }
         }
