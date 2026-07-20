@@ -299,50 +299,60 @@ export default function DebtTracker({ debts = [], addDebt, updateDebt, deleteDeb
       {/* --- TOP SUMMARY CARDS --- */}
       <div className="metrics-grid">
         
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">Owed to You</span>
-            <div className="metric-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)' }}>
-              <ArrowDownLeft size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Owed to You</span>
+            <span className="metric-value text-success">{formatCurrency(metrics.owedToYou)}</span>
+            <span className="metric-subtext positive" style={{ color: 'var(--success)' }}>
+              <ArrowDownLeft size={14} /> One-time loans to friends/others
+            </span>
           </div>
-          <div className="metric-value text-success">{formatCurrency(metrics.owedToYou)}</div>
-          <div className="metric-subtitle">One-time loans to friends/others</div>
+          <div className="metric-icon-box" style={{ color: 'var(--success)', borderLeft: '3px solid var(--success)' }}>
+            <ArrowDownLeft size={22} />
+          </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">You Owe (One-Time)</span>
-            <div className="metric-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)' }}>
-              <ArrowUpRight size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">You Owe (One-Time)</span>
+            <span className="metric-value text-warning">{formatCurrency(metrics.youOwe)}</span>
+            <span className="metric-subtext negative" style={{ color: 'var(--warning)' }}>
+              <ArrowUpRight size={14} /> One-time pending debts
+            </span>
           </div>
-          <div className="metric-value text-warning">{formatCurrency(metrics.youOwe)}</div>
-          <div className="metric-subtitle">One-time pending debts</div>
+          <div className="metric-icon-box" style={{ color: 'var(--warning)', borderLeft: '3px solid var(--warning)' }}>
+            <ArrowUpRight size={22} />
+          </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">Monthly EMI Payouts</span>
-            <div className="metric-icon" style={{ backgroundColor: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)' }}>
-              <CreditCard size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Monthly EMI Payouts</span>
+            <span className="metric-value" style={{ color: 'var(--primary)' }}>
+              {formatCurrency(metrics.totalMonthlyEmis)} <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>/ mo</span>
+            </span>
+            <span className="metric-subtext" style={{ color: 'var(--primary)' }}>
+              <CreditCard size={14} /> Total active recurring EMIs
+            </span>
           </div>
-          <div className="metric-value" style={{ color: 'var(--primary)' }}>{formatCurrency(metrics.totalMonthlyEmis)} <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>/ mo</span></div>
-          <div className="metric-subtitle">Total active recurring EMIs</div>
+          <div className="metric-icon-box" style={{ color: 'var(--primary)', borderLeft: '3px solid var(--primary)' }}>
+            <CreditCard size={22} />
+          </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">Net Balance</span>
-            <div className="metric-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-              <Coins size={20} />
-            </div>
+        <div className="card metric-card">
+          <div className="metric-info">
+            <span className="metric-label">Net Balance</span>
+            <span className={`metric-value ${metrics.netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatCurrency(metrics.netBalance)}
+            </span>
+            <span className="metric-subtext" style={{ color: 'var(--text-muted)' }}>
+              <Coins size={14} /> Owed minus You Owe
+            </span>
           </div>
-          <div className={`metric-value ${metrics.netBalance >= 0 ? 'text-success' : 'text-danger'}`}>
-            {formatCurrency(metrics.netBalance)}
+          <div className="metric-icon-box" style={{ color: metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)', borderLeft: `3px solid ${metrics.netBalance >= 0 ? 'var(--success)' : 'var(--danger)'}` }}>
+            <Coins size={22} />
           </div>
-          <div className="metric-subtitle">Owed minus You Owe</div>
         </div>
 
       </div>
