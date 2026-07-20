@@ -17,10 +17,13 @@ export const TransactionSchema = z.object({
   date: z.string().min(1),
   category: z.string().min(1),
   amount: posNum(),
-  type: z.enum(['inflow', 'outflow']).optional().nullable(),
+  type: z.preprocess(
+    (val) => (val === 'inflow' || val === 'outflow' ? val : 'outflow'),
+    z.enum(['inflow', 'outflow'])
+  ),
   description: optionalNullableString(),
   paymentMethod: optionalNullableString(),
-  status: z.enum(['Cleared', 'Pending']).optional().nullable(),
+  status: optionalNullableString(),
   createdAt: optionalNullableString(),
   updatedAt: optionalNullableString(),
   sourceDevice: optionalNullableString(),

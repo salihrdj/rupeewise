@@ -39,39 +39,34 @@ export default function TransactionTable({
 
   // --- FILTER LOGIC ---
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(tx => {
-      // 1. Text Search match (Description or Category)
-      const matchesSearch = 
-        tx.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tx.category.toLowerCase().includes(searchTerm.toLowerCase())
+    return (transactions || []).filter(tx => {
+      if (!tx) return false
+      const desc = tx.description ? String(tx.description) : ''
+      const cat = tx.category ? String(tx.category) : ''
+      const search = (searchTerm || '').toLowerCase()
 
-      // 2. Category match
+      const matchesSearch = desc.toLowerCase().includes(search) || cat.toLowerCase().includes(search)
       const matchesCategory = selectedCategory === 'All' || tx.category === selectedCategory
-
-      // 3. Payment Method match
       const matchesPayment = selectedPayment === 'All' || tx.paymentMethod === selectedPayment
-
-      // 4. Type (Inflow / Outflow) match
       const matchesType = selectedType === 'All' || (tx.type || 'outflow') === selectedType
 
-      // 5. Date range match
       let matchesDate = true
-      if (startDate) {
+      if (startDate && tx.date) {
         matchesDate = matchesDate && tx.date >= startDate
       }
-      if (endDate) {
+      if (endDate && tx.date) {
         matchesDate = matchesDate && tx.date <= endDate
       }
 
       return matchesSearch && matchesCategory && matchesPayment && matchesType && matchesDate
     }).sort((a, b) => {
-      // Primary sort: Date descending (newest first)
-      const dateCompare = b.date.localeCompare(a.date)
+      const aDate = a.date ? String(a.date) : ''
+      const bDate = b.date ? String(b.date) : ''
+      const dateCompare = bDate.localeCompare(aDate)
       if (dateCompare !== 0) return dateCompare
       
-      // Secondary sort: Created At descending (most recently logged first)
-      const aCreated = a.createdAt || ''
-      const bCreated = b.createdAt || ''
+      const aCreated = a.createdAt ? String(a.createdAt) : ''
+      const bCreated = b.createdAt ? String(b.createdAt) : ''
       return bCreated.localeCompare(aCreated)
     })
   }, [transactions, searchTerm, selectedCategory, selectedPayment, selectedType, startDate, endDate])

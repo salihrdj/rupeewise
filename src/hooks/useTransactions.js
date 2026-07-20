@@ -12,22 +12,27 @@ export function useTransactions() {
       if (localTxs) {
         try {
           const parsedTxs = JSON.parse(localTxs)
-          const validationResult = validateTransactions(parsedTxs)
-          if (validationResult.success) {
-            const filteredTxs = validationResult.data.filter(
-              t => t && typeof t.id === 'string' && !t.id.startsWith('tx-sample-')
-            ).filter(t => t && t.syncPending !== 'delete')
-            setTransactions(filteredTxs)
-            safeSetItem('spend_transactions', JSON.stringify(validationResult.data))
+          if (Array.isArray(parsedTxs)) {
+            const validationResult = validateTransactions(parsedTxs)
+            if (validationResult.success) {
+              const filteredTxs = validationResult.data.filter(
+                t => t && typeof t.id === 'string' && !t.id.startsWith('tx-sample-')
+              ).filter(t => t && t.syncPending !== 'delete')
+              setTransactions(filteredTxs)
+              safeSetItem('spend_transactions', JSON.stringify(validationResult.data))
+            } else {
+              console.warn('Transaction validation warning, salvaging valid entries:', validationResult.error)
+              const salvagedTxs = parsedTxs.filter(
+                t => t && typeof t.id === 'string' && typeof t.category === 'string' && !isNaN(parseFloat(t.amount)) && !String(t.id).startsWith('tx-sample-') && t.syncPending !== 'delete'
+              )
+              setTransactions(salvagedTxs)
+            }
           } else {
-            console.error('Transaction validation failed:', validationResult.error)
             setTransactions([])
-            safeSetItem('spend_transactions', JSON.stringify([]))
           }
         } catch (err) {
           console.error('Failed to parse transactions:', err)
           setTransactions([])
-          safeSetItem('spend_transactions', JSON.stringify([]))
         }
       } else {
         setTransactions([])
