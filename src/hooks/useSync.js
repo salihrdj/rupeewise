@@ -33,8 +33,10 @@ export function useSync({
 
     // Construct action string compatible with n8n workflow router
     let actionString = action
-    if (type === 'debt' && !action.includes('debt')) {
-      actionString = `${action}_debt`
+    if (type === 'debt') {
+      if (!action.endsWith('_debt')) {
+        actionString = `${action}_debt`
+      }
     }
     
     try {
