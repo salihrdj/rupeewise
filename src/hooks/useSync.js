@@ -31,13 +31,8 @@ export function useSync({
       if (!lockAcquired) return false
     }
 
-    // Construct action string compatible with n8n workflow router
-    let actionString = action
-    if (type === 'debt') {
-      if (!action.endsWith('_debt')) {
-        actionString = `${action}_debt`
-      }
-    }
+    // Standardize action to match n8n switch router rules ('add', 'update', 'delete')
+    const actionString = action.replace(/_debt$/, '')
     
     try {
       const response = await fetchWithTimeout(n8nUrl, {
@@ -325,9 +320,30 @@ export function useSync({
       }
 
       // Merge Debts
-      if (validatedData.debts) {
-        const localDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
-        const remoteDebts = validatedData.debts
+      const localDebts = JSON.parse(safeGetItem('spend_debts') || '[]')
+      const remoteDebts = validatedData.debts ? [...validatedData.debts] : []
+
+      // Fallback: If remoteDebts is empty but remoteTxs has debt/loan entries, convert them to remoteDebts
+      if (remoteDebts.length === 0 && validatedData.transactions && validatedData.transactions.length > 0) {
+        const debtTxs = validatedData.transactions.filter(t => 
+          t && (t.paymentMethod === 'Debt/Loan' || t.category === 'Debts' || String(t.description).toLowerCase().startsWith('debt:') || String(t.description).toLowerCase().startsWith('loan:'))
+        )
+        for (const dt of debtTxs) {
+          const debtName = dt.description ? dt.description.replace(/^(debt:|loan:)\s*/i, '') : 'Debt Entry'
+          remoteDebts.push({
+            id: dt.id,
+            name: debtName,
+            amount: dt.amount,
+            type: dt.type === 'inflow' ? 'loan' : 'debt',
+            date: dt.date,
+            status: dt.status || 'pending',
+            createdAt: dt.createdAt || dt.date,
+            updatedAt: dt.updatedAt || dt.date
+          })
+        }
+      }
+
+      if (remoteDebts.length > 0 || localDebts.length > 0) {
         const mergedDebts = []
 
         for (const remoteDebt of remoteDebts) {
